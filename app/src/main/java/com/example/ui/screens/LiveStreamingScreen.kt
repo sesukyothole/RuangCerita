@@ -439,12 +439,8 @@ fun LiveStreamingScreen(
         channels = list
         if (list.isNotEmpty()) {
             currentChannel = list.firstOrNull()
-            multiScreenChannels = listOf(
-                list.getOrNull(0),
-                list.getOrNull(1) ?: list.getOrNull(0),
-                list.getOrNull(2) ?: list.getOrNull(0),
-                list.getOrNull(3) ?: list.getOrNull(1) ?: list.getOrNull(0)
-            )
+            // Multi-screen mode mewajibkan pengguna memilih channel masing-masing layar secara mandiri
+            multiScreenChannels = listOf(null, null, null, null)
         }
         isLoadingChannels = false
     }
@@ -452,14 +448,6 @@ fun LiveStreamingScreen(
     // Load stream when currentChannel changes
     LaunchedEffect(currentChannel) {
         loadStream(currentChannel, exoPlayer)
-        val currentFirst = multiScreenChannels.getOrNull(0)
-        if (currentChannel != null && currentFirst?.id != currentChannel?.id) {
-            val updated = multiScreenChannels.toMutableList()
-            if (updated.isNotEmpty()) {
-                updated[0] = currentChannel
-                multiScreenChannels = updated
-            }
-        }
     }
 
     val sortedChannels = remember(channels, currentSortMode) {
@@ -586,137 +574,341 @@ fun LiveStreamingScreen(
         }
     }
 
+    val goToPreviousChannelForScreen: (Int) -> Unit = { screenIdx ->
+        if (sortedChannels.isNotEmpty()) {
+            val currentCh = multiScreenChannels.getOrNull(screenIdx)
+            val currentIndex = if (currentCh != null) sortedChannels.indexOfFirst { it.id == currentCh.id } else -1
+            val prevIndex = if (currentIndex <= 0) sortedChannels.size - 1 else currentIndex - 1
+            val target = sortedChannels[prevIndex]
+
+            val updated = multiScreenChannels.toMutableList()
+            while (updated.size <= screenIdx) updated.add(null)
+            updated[screenIdx] = target
+            multiScreenChannels = updated
+            if (screenIdx == 0) {
+                currentChannel = target
+            }
+
+            val feedbackText = "Layar ${screenIdx + 1} ❮ Prev: ${target.name} (${prevIndex + 1}/${sortedChannels.size})"
+            channelSwitchFeedback = feedbackText
+            Toast.makeText(context, feedbackText, Toast.LENGTH_SHORT).show()
+
+            feedbackJob?.cancel()
+            feedbackJob = scope.launch {
+                delay(2200L)
+                channelSwitchFeedback = null
+            }
+        }
+    }
+
+    val goToNextChannelForScreen: (Int) -> Unit = { screenIdx ->
+        if (sortedChannels.isNotEmpty()) {
+            val currentCh = multiScreenChannels.getOrNull(screenIdx)
+            val currentIndex = if (currentCh != null) sortedChannels.indexOfFirst { it.id == currentCh.id } else -1
+            val nextIndex = if (currentIndex >= sortedChannels.size - 1 || currentIndex == -1) 0 else currentIndex + 1
+            val target = sortedChannels[nextIndex]
+
+            val updated = multiScreenChannels.toMutableList()
+            while (updated.size <= screenIdx) updated.add(null)
+            updated[screenIdx] = target
+            multiScreenChannels = updated
+            if (screenIdx == 0) {
+                currentChannel = target
+            }
+
+            val feedbackText = "Layar ${screenIdx + 1} Next ❯: ${target.name} (${nextIndex + 1}/${sortedChannels.size})"
+            channelSwitchFeedback = feedbackText
+            Toast.makeText(context, feedbackText, Toast.LENGTH_SHORT).show()
+
+            feedbackJob?.cancel()
+            feedbackJob = scope.launch {
+                delay(2200L)
+                channelSwitchFeedback = null
+            }
+        }
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(themeBgColor)
             .testTag("live_streaming_screen")
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            // --- BAGIAN ATAS: LIVE STREAMING VIDEO (MEMAKSIMALKAN UKURAN LAYAR) ---
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .then(
-                        if (isFullScreen || !areControlsVisible) Modifier.fillMaxSize()
-                        else Modifier.weight(1f)
-                    )
-                    .background(Color.Black),
-                contentAlignment = Alignment.Center
-            ) {
-                if (currentMultiScreenMode == MultiScreenMode.SINGLE) {
-                    // Single Video Player View
-                    SingleLivePlayerView(
-                        channel = currentChannel,
-                        player = exoPlayer,
-                        isBuffering = isBuffering,
-                        isPlaying = isPlaying,
-                        streamError = streamError,
-                        showControls = if (isFullScreen) showControlsInFullScreen else areControlsVisible,
-                        onToggleControls = {
-                            if (isFullScreen) {
-                                showControlsInFullScreen = !showControlsInFullScreen
-                                lastInteractionTime = System.currentTimeMillis()
-                            } else {
-                                toggleControlsVisibility()
-                            }
-                        },
-                        onToggleFullScreen = {
-                            if (isFullScreen) {
-                                showControlsInFullScreen = !showControlsInFullScreen
-                            } else {
-                                isFullScreen = true
-                            }
-                        },
-                        onUserInteraction = { recordUserInteraction() },
-                        onPreviousChannel = { goToPreviousChannel() },
-                        onNextChannel = { goToNextChannel() },
-                        channelSwitchFeedback = channelSwitchFeedback,
-                        isFavorite = currentChannel?.let { favoriteChannelIds.contains(it.id) } ?: false,
-                        onToggleFavorite = {
-                            currentChannel?.let { ch -> toggleFavoriteChannel(ch.id) }
-                        },
-                        modifier = Modifier.fillMaxSize()
-                    )
-                } else {
-                    // Multi Screen Player View (2 Layar: Atas & Bawah, atau 4 Layar: Grid 2x2)
-                    MultiScreenPlayerLayout(
-                        mode = currentMultiScreenMode,
-                        screenChannels = multiScreenChannels,
-                        activeAudioIndex = activeAudioIndex,
-                        volumeLevel = volumeLevel,
-                        onSelectAudioIndex = { index ->
-                            activeAudioIndex = index
-                            recordUserInteraction()
-                            Toast.makeText(context, "🔊 Audio Aktif: Layar ${index + 1}", Toast.LENGTH_SHORT).show()
-                        },
-                        onRequestChannelPicker = { index ->
-                            pickerTargetScreenIndex = index
-                            recordUserInteraction()
-                        },
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-
-                // Global Buffering indicator during channel repository fetch
-                if (isLoadingChannels) {
-                    Surface(
-                        color = Color.Black.copy(alpha = 0.85f),
-                        shape = RoundedCornerShape(16.dp),
-                        modifier = Modifier.padding(16.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            CircularProgressIndicator(
-                                color = Color(0xFFFFD700),
-                                strokeWidth = 3.dp,
-                                modifier = Modifier.size(24.dp)
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Text(
-                                text = "Mengambil siaran IPTV...",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
-                            )
+        // --- BAGIAN VIDEO STREAMING UTAMA (SELALU FULL LAYAR PENUH 100%) ---
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black),
+            contentAlignment = Alignment.Center
+        ) {
+            if (currentMultiScreenMode == MultiScreenMode.SINGLE) {
+                // Single Video Player View
+                SingleLivePlayerView(
+                    channel = currentChannel,
+                    player = exoPlayer,
+                    isBuffering = isBuffering,
+                    isPlaying = isPlaying,
+                    streamError = streamError,
+                    showControls = if (isFullScreen) showControlsInFullScreen else areControlsVisible,
+                    onToggleControls = {
+                        if (isFullScreen) {
+                            showControlsInFullScreen = !showControlsInFullScreen
+                            lastInteractionTime = System.currentTimeMillis()
+                        } else {
+                            toggleControlsVisibility()
                         }
+                    },
+                    onToggleFullScreen = {
+                        if (isFullScreen) {
+                            showControlsInFullScreen = !showControlsInFullScreen
+                        } else {
+                            isFullScreen = true
+                        }
+                    },
+                    onUserInteraction = { recordUserInteraction() },
+                    onPreviousChannel = { goToPreviousChannel() },
+                    onNextChannel = { goToNextChannel() },
+                    onOpenChannelPicker = {
+                        pickerTargetScreenIndex = 0
+                        recordUserInteraction()
+                    },
+                    channelSwitchFeedback = channelSwitchFeedback,
+                    isFavorite = currentChannel?.let { favoriteChannelIds.contains(it.id) } ?: false,
+                    onToggleFavorite = {
+                        currentChannel?.let { ch -> toggleFavoriteChannel(ch.id) }
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                // Multi Screen Player View (2 Layar: Atas & Bawah, atau 4 Layar: Grid 2x2)
+                MultiScreenPlayerLayout(
+                    mode = currentMultiScreenMode,
+                    screenChannels = multiScreenChannels,
+                    activeAudioIndex = activeAudioIndex,
+                    volumeLevel = volumeLevel,
+                    onSelectAudioIndex = { index ->
+                        activeAudioIndex = index
+                        recordUserInteraction()
+                        Toast.makeText(context, "🔊 Audio Aktif: Layar ${index + 1}", Toast.LENGTH_SHORT).show()
+                    },
+                    onRequestChannelPicker = { index ->
+                        pickerTargetScreenIndex = index
+                        recordUserInteraction()
+                    },
+                    onPreviousChannel = { index ->
+                        goToPreviousChannelForScreen(index)
+                    },
+                    onNextChannel = { index ->
+                        goToNextChannelForScreen(index)
+                    },
+                    onToggleControls = {
+                        toggleControlsVisibility()
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+
+            // Global Buffering indicator during channel repository fetch
+            if (isLoadingChannels) {
+                Surface(
+                    color = Color.Black.copy(alpha = 0.85f),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        CircularProgressIndicator(
+                            color = Color(0xFFFFD700),
+                            strokeWidth = 3.dp,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = "Mengambil siaran IPTV...",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
                     }
                 }
             }
+        }
 
-            // If not in Full Screen mode and controls are visible, show the Luxury Minimalist Control Bar and Compact Channel Grid:
-            AnimatedVisibility(
-                visible = !isFullScreen && areControlsVisible,
-                enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-                exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
+        // Tombol Melayang Cepat untuk Membuka Pilihan Channel & Kontrol saat Tersembunyi
+        AnimatedVisibility(
+            visible = !areControlsVisible && !isFullScreen,
+            enter = fadeIn() + slideInVertically(initialOffsetY = { it }),
+            exit = fadeOut() + slideOutVertically(targetOffsetY = { it }),
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 12.dp)
+        ) {
+            Surface(
+                onClick = {
+                    toggleControlsVisibility()
+                },
+                shape = RoundedCornerShape(20.dp),
+                color = Color.Black.copy(alpha = 0.82f),
+                border = BorderStroke(1.2.dp, themeGoldAccent.copy(alpha = 0.85f)),
+                shadowElevation = 8.dp,
+                modifier = Modifier.testTag("floating_open_channel_controls_button")
             ) {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    // --- BAGIAN KONTROL MINIMALIS & MEWAH ---
-                    Surface(
-                        color = themeControlBarBg,
-                        border = BorderStroke(
-                            1.dp,
-                            Brush.horizontalGradient(
-                                listOf(
-                                    themeGoldSoft,
-                                    themeGoldAccent.copy(alpha = 0.85f),
-                                    themeGoldSoft
-                                )
-                            )
-                        ),
-                        tonalElevation = 6.dp,
-                        shadowElevation = 8.dp,
-                        modifier = Modifier.fillMaxWidth()
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Tv,
+                        contentDescription = null,
+                        tint = themeGoldAccent,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Text(
+                        text = "Pilihan Siaran & Kontrol",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                }
+            }
+        }
+
+        // --- FORMAT MELAYANG / POP UP: PILIHAN CHANNEL DAN KELENGKAPANNYA (1 LAYAR & MULTI LAYAR) ---
+        AnimatedVisibility(
+            visible = !isFullScreen && areControlsVisible,
+            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .padding(horizontal = if (isLandscape) 14.dp else 8.dp)
+                .padding(bottom = if (isLandscape) 6.dp else 10.dp)
+        ) {
+            Surface(
+                shape = RoundedCornerShape(18.dp),
+                color = themeControlBarBg.copy(alpha = 0.96f),
+                border = BorderStroke(
+                    1.2.dp,
+                    Brush.horizontalGradient(
+                        listOf(
+                            themeGoldSoft,
+                            themeGoldAccent,
+                            themeGoldSoft
+                        )
+                    )
+                ),
+                shadowElevation = 16.dp,
+                tonalElevation = 8.dp,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("floating_channel_controls_popup")
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp, bottom = 4.dp, start = 6.dp, end = 6.dp)
+                ) {
+                    // Header Pop-up Melayang: Judul dan Tombol Tutup (✕)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.LiveTv,
+                                contentDescription = null,
+                                tint = themeGoldAccent,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = if (currentMultiScreenMode == MultiScreenMode.SINGLE)
+                                    "Pilihan Channel & Kontrol Siaran"
+                                else
+                                    "Pilihan Channel & Kontrol Multi Layar (${currentMultiScreenMode.title})",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = themeTextColor
+                            )
+                        }
+
+                        IconButton(
+                            onClick = {
+                                areControlsVisible = false
+                                onControlsVisibilityChange(false)
+                            },
+                            modifier = Modifier
+                                .size(26.dp)
+                                .testTag("close_floating_controls_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Tutup Pilihan Channel",
+                                tint = themeTextSecondary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+
+                    // Baris Pemilihan Target Layar (Khusus saat Mode Multi Layar Aktif)
+                    if (currentMultiScreenMode != MultiScreenMode.SINGLE) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 8.dp, vertical = 5.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
+                                .padding(horizontal = 6.dp, vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
+                            Text(
+                                text = "Pilih Untuk:",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = themeGoldAccent
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            (0 until currentMultiScreenMode.count).forEach { screenIdx ->
+                                val isTarget = (activeAudioIndex == screenIdx)
+                                val hasChannel = multiScreenChannels.getOrNull(screenIdx) != null
+                                Surface(
+                                    onClick = {
+                                        activeAudioIndex = screenIdx
+                                        recordUserInteraction()
+                                    },
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = if (isTarget) themeGoldAccent else (if (isDark) Color(0xFF222436) else Color(0xFFE2E6F0)),
+                                    border = BorderStroke(
+                                        0.8.dp,
+                                        if (isTarget) themeGoldAccent else (if (isDark) Color(0xFF3B3E5B) else Color(0xFFCBD2E1))
+                                    ),
+                                    modifier = Modifier
+                                        .padding(end = 6.dp)
+                                        .testTag("target_screen_chip_${screenIdx + 1}")
+                                ) {
+                                    Text(
+                                        text = "Layar ${screenIdx + 1}${if (hasChannel) " (${multiScreenChannels[screenIdx]?.name?.take(8) ?: "✓"})" else " (Kosong)"}",
+                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                                        fontWeight = if (isTarget) FontWeight.ExtraBold else FontWeight.Medium,
+                                        color = if (isTarget) Color.Black else themeTextColor,
+                                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // --- BAGIAN KONTROL LENGKAP (7 TOMBOL UTAMA) ---
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 4.dp, vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
                             // 1. Tombol Pemilihan Warna (Terang / Gelap / Default Perangkat)
                             Surface(
                                 onClick = {
@@ -935,17 +1127,19 @@ fun LiveStreamingScreen(
                             )
                         }
                     }
-                }
 
-                // --- BAGIAN BAWAH: GENRE TABS & CHANNEL GRID (DIPERKECIL: MEMUNCULKAN ~3-4 BARIS) ---
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(channelListHeight) // Menyesuaikan tinggi landscape (140.dp) dan portrait (185.dp)
-                        .background(themeChannelListBg)
-                        .padding(horizontal = 6.dp)
-                ) {
-                    // Genre Scrollable Tabs
+                    Spacer(modifier = Modifier.height(2.dp))
+
+                    // --- BAGIAN GENRE TABS & CHANNEL GRID (POP UP MELAYANG) ---
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(channelListHeight)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(themeChannelListBg)
+                            .padding(horizontal = 4.dp, vertical = 2.dp)
+                    ) {
+                        // Genre Scrollable Tabs
                     ScrollableTabRow(
                         selectedTabIndex = pagerState.currentPage.coerceIn(0, (genreList.size - 1).coerceAtLeast(0)),
                         edgePadding = 0.dp,
@@ -1934,9 +2128,22 @@ fun LiveStreamingScreen(
             MultiScreenModeDialog(
                 currentMode = currentMultiScreenMode,
                 onModeSelected = { newMode ->
+                    val oldMode = currentMultiScreenMode
                     currentMultiScreenMode = newMode
+                    if (newMode != MultiScreenMode.SINGLE && newMode != oldMode) {
+                        // Pengguna diwajibkan memilih channel masing-masing layar secara mandiri
+                        multiScreenChannels = listOf(null, null, null, null)
+                        activeAudioIndex = 0
+                        // Buka otomatis kotak pilihan channel untuk Layar 1
+                        pickerTargetScreenIndex = 0
+                    }
                     recordUserInteraction()
-                    Toast.makeText(context, "Mode ${newMode.title} Aktif", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(
+                        context,
+                        if (newMode == MultiScreenMode.SINGLE) "Mode 1 Layar Aktif"
+                        else "Mode ${newMode.title} Aktif: Silakan pilih channel untuk tiap layar",
+                        Toast.LENGTH_SHORT
+                    ).show()
                 },
                 onDismiss = { showMultiScreenDialog = false },
                 isDark = isDark
@@ -1961,9 +2168,18 @@ fun LiveStreamingScreen(
                     if (targetIdx == 0) {
                         currentChannel = selectedChannel
                     }
-                    pickerTargetScreenIndex = null
+                    val nextEmptyIdx = (0 until currentMultiScreenMode.count).firstOrNull { idx ->
+                        idx != targetIdx && multiScreenChannels.getOrNull(idx) == null
+                    }
                     recordUserInteraction()
                     Toast.makeText(context, "Layar ${targetIdx + 1} memutar: ${selectedChannel.name}", Toast.LENGTH_SHORT).show()
+
+                    // Otomatis pandu pengguna memilih channel untuk layar berikutnya yang masih kosong
+                    if (nextEmptyIdx != null) {
+                        pickerTargetScreenIndex = nextEmptyIdx
+                    } else {
+                        pickerTargetScreenIndex = null
+                    }
                 },
                 onDismiss = { pickerTargetScreenIndex = null },
                 isDark = isDark
@@ -1997,6 +2213,7 @@ private fun SingleLivePlayerView(
     onUserInteraction: () -> Unit,
     onPreviousChannel: () -> Unit = {},
     onNextChannel: () -> Unit = {},
+    onOpenChannelPicker: () -> Unit = {},
     channelSwitchFeedback: String? = null,
     isFavorite: Boolean = false,
     onToggleFavorite: () -> Unit = {},
@@ -2052,31 +2269,32 @@ private fun SingleLivePlayerView(
 
         // Touch overlay:
         // - Single tap: Munculkan / sembunyikan tombol kontrol
-        // - Double tap kanan atas: Ganti channel sebelumnya (wrap around ke channel akhir jika di awal)
-        // - Double tap kanan bawah: Ganti channel selanjutnya (wrap around ke channel pertama jika di akhir)
-        // - Double tap sisi kiri: Toggle layar penuh
+        // - Double tap tengah: Munculkan kotak pop up pemilihan channel
+        // - Double tap kanan/kiri atas: Ganti channel sebelumnya
+        // - Double tap kanan/kiri bawah: Ganti channel selanjutnya
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .pointerInput(onPreviousChannel, onNextChannel, onToggleControls, onToggleFullScreen) {
+                .pointerInput(onPreviousChannel, onNextChannel, onToggleControls, onOpenChannelPicker) {
                     detectTapGestures(
                         onTap = {
                             onToggleControls()
                         },
                         onDoubleTap = { offset ->
-                            val isRightSide = offset.x >= (size.width * 0.5f)
-                            if (isRightSide) {
+                            val isCenterX = offset.x >= (size.width * 0.22f) && offset.x <= (size.width * 0.78f)
+                            val isCenterY = offset.y >= (size.height * 0.22f) && offset.y <= (size.height * 0.78f)
+                            if (isCenterX && isCenterY) {
+                                // Ketuk 2x di Tengah Layar: Otomatis munculkan kotak pop up pemilihan channel
+                                onOpenChannelPicker()
+                            } else {
                                 val isTopHalf = offset.y < (size.height * 0.5f)
                                 if (isTopHalf) {
-                                    // Kanan atas: ganti channel sebelumnya
+                                    // Ketuk 2x Kanan/Kiri Atas: Ganti channel sebelumnya
                                     onPreviousChannel()
                                 } else {
-                                    // Kanan bawah: ganti channel selanjutnya
+                                    // Ketuk 2x Kanan/Kiri Bawah: Ganti channel selanjutnya
                                     onNextChannel()
                                 }
-                            } else {
-                                // Sisi kiri: toggle layar penuh
-                                onToggleFullScreen()
                             }
                         }
                     )
@@ -2223,8 +2441,8 @@ private fun SingleLivePlayerView(
                     border = BorderStroke(0.6.dp, Color(0xFFFFD700).copy(alpha = 0.6f))
                 ) {
                     Text(
-                        text = "Ketuk 2x Kanan Atas: ❮ Prev | Kanan Bawah: Next ❯",
-                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                        text = "Ketuk 2x Tengah: Pop Up Channel | Kanan/Kiri Atas: ❮ Prev | Kanan/Kiri Bawah: Next ❯",
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.5.sp),
                         color = Color(0xFFFFD700),
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
