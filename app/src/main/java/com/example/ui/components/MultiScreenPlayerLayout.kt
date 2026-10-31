@@ -74,6 +74,7 @@ fun MultiScreenPlayerLayout(
     onPreviousChannel: (Int) -> Unit = {},
     onNextChannel: (Int) -> Unit = {},
     onToggleControls: () -> Unit = {},
+    aspectRatioMode: com.example.ui.screens.VideoAspectRatioMode = com.example.ui.screens.VideoAspectRatioMode.FIT,
     modifier: Modifier = Modifier
 ) {
     Box(
@@ -105,6 +106,7 @@ fun MultiScreenPlayerLayout(
                             onPreviousChannel = { onPreviousChannel(0) },
                             onNextChannel = { onNextChannel(0) },
                             onToggleControls = onToggleControls,
+                            aspectRatioMode = aspectRatioMode,
                             modifier = Modifier.fillMaxSize()
                         )
                     }
@@ -141,6 +143,7 @@ fun MultiScreenPlayerLayout(
                             onPreviousChannel = { onPreviousChannel(1) },
                             onNextChannel = { onNextChannel(1) },
                             onToggleControls = onToggleControls,
+                            aspectRatioMode = aspectRatioMode,
                             modifier = Modifier.fillMaxSize()
                         )
                     }
@@ -174,6 +177,7 @@ fun MultiScreenPlayerLayout(
                                 onPreviousChannel = { onPreviousChannel(0) },
                                 onNextChannel = { onNextChannel(0) },
                                 onToggleControls = onToggleControls,
+                                aspectRatioMode = aspectRatioMode,
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
@@ -207,6 +211,7 @@ fun MultiScreenPlayerLayout(
                                 onPreviousChannel = { onPreviousChannel(1) },
                                 onNextChannel = { onNextChannel(1) },
                                 onToggleControls = onToggleControls,
+                                aspectRatioMode = aspectRatioMode,
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
@@ -247,6 +252,7 @@ fun MultiScreenPlayerLayout(
                                 onPreviousChannel = { onPreviousChannel(2) },
                                 onNextChannel = { onNextChannel(2) },
                                 onToggleControls = onToggleControls,
+                                aspectRatioMode = aspectRatioMode,
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
@@ -280,6 +286,7 @@ fun MultiScreenPlayerLayout(
                                 onPreviousChannel = { onPreviousChannel(3) },
                                 onNextChannel = { onNextChannel(3) },
                                 onToggleControls = onToggleControls,
+                                aspectRatioMode = aspectRatioMode,
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
@@ -303,6 +310,7 @@ private fun SingleMultiScreenPane(
     onPreviousChannel: () -> Unit = {},
     onNextChannel: () -> Unit = {},
     onToggleControls: () -> Unit = {},
+    aspectRatioMode: com.example.ui.screens.VideoAspectRatioMode = com.example.ui.screens.VideoAspectRatioMode.FIT,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -379,7 +387,7 @@ private fun SingleMultiScreenPane(
                 PlayerView(ctx).apply {
                     this.player = player
                     useController = false
-                    resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                    resizeMode = aspectRatioMode.resizeMode
                     setShutterBackgroundColor(android.graphics.Color.TRANSPARENT)
                     setKeepContentOnPlayerReset(true)
                 }
@@ -388,6 +396,7 @@ private fun SingleMultiScreenPane(
                 if (view.player !== player) {
                     view.player = player
                 }
+                view.resizeMode = aspectRatioMode.resizeMode
             },
             onRelease = { view ->
                 view.player = null

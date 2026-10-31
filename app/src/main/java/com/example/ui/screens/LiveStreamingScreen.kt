@@ -27,7 +27,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -54,6 +56,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.BrightnessAuto
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -177,6 +180,18 @@ enum class AppOrientationMode(val title: String, val subtitle: String) {
     AUTO("Automatic", "Sesuai Setingan Device")
 }
 
+enum class VideoAspectRatioMode(
+    val title: String,
+    val subtitle: String,
+    val resizeMode: Int
+) {
+    FIT("Fit", "Sesuai Ukuran Layar Device (Default)", AspectRatioFrameLayout.RESIZE_MODE_FIT),
+    ZOOM("Zoom", "Potong & Zoom Isi Layar", AspectRatioFrameLayout.RESIZE_MODE_ZOOM),
+    FILL("Fill", "Isi Penuh Layar (Stretch)", AspectRatioFrameLayout.RESIZE_MODE_FILL),
+    FIXED_WIDTH("Fixed Width", "Lebar Tetap Pas Layar", AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH),
+    FIXED_HEIGHT("Fixed Height", "Tinggi Tetap Pas Layar", AspectRatioFrameLayout.RESIZE_MODE_FIXED_HEIGHT)
+}
+
 @OptIn(UnstableApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun LiveStreamingScreen(
@@ -222,9 +237,9 @@ fun LiveStreamingScreen(
 
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.screenWidthDp > configuration.screenHeightDp
-    val channelListHeight = if (isLandscape) 150.dp else 195.dp
-    // Jumlah kolom channel dibuat 6 agar visual kartu channel terlihat lebih besar & jelas
-    val columnCount = if (isLandscape) 6 else 4
+    val channelListHeight = if (isLandscape) 130.dp else 170.dp
+    // Jumlah kolom channel dibuat 5 (landscape) & 3 (portrait) agar proporsional dalam pop-up 3/4 layar
+    val columnCount = if (isLandscape) 5 else 3
 
     var showPlaylistSettingsSheet by remember { mutableStateOf(false) }
     var showAudioVolumeDialog by remember { mutableStateOf(false) }
@@ -232,6 +247,8 @@ fun LiveStreamingScreen(
     var showOrientationDialog by remember { mutableStateOf(false) }
     var showSortDialog by remember { mutableStateOf(false) }
     var showMultiScreenDialog by remember { mutableStateOf(false) }
+    var showAspectRatioDialog by remember { mutableStateOf(false) }
+    var currentAspectRatioMode by remember { mutableStateOf(VideoAspectRatioMode.FIT) }
     var currentMultiScreenMode by remember { mutableStateOf(MultiScreenMode.SINGLE) }
     var multiScreenChannels by remember { mutableStateOf<List<IptvChannel?>>(listOf(null, null, null, null)) }
     var activeAudioIndex by remember { mutableStateOf(0) }
@@ -677,6 +694,7 @@ fun LiveStreamingScreen(
                     onToggleFavorite = {
                         currentChannel?.let { ch -> toggleFavoriteChannel(ch.id) }
                     },
+                    aspectRatioMode = currentAspectRatioMode,
                     modifier = Modifier.fillMaxSize()
                 )
             } else {
@@ -704,6 +722,7 @@ fun LiveStreamingScreen(
                     onToggleControls = {
                         toggleControlsVisibility()
                     },
+                    aspectRatioMode = currentAspectRatioMode,
                     modifier = Modifier.fillMaxSize()
                 )
             }
@@ -736,23 +755,24 @@ fun LiveStreamingScreen(
             }
         }
 
-        // Tombol Melayang Cepat untuk Membuka Pilihan Channel & Kontrol saat Tersembunyi
+        // Tombol Melayang Cepat Dipindahkan Ke Atas untuk Membuka Pilihan Channel & Kontrol saat Tersembunyi
         AnimatedVisibility(
             visible = !areControlsVisible && !isFullScreen,
-            enter = fadeIn() + slideInVertically(initialOffsetY = { it }),
-            exit = fadeOut() + slideOutVertically(targetOffsetY = { it }),
+            enter = fadeIn() + slideInVertically(initialOffsetY = { -it }),
+            exit = fadeOut() + slideOutVertically(targetOffsetY = { -it }),
             modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 12.dp)
+                .align(Alignment.TopCenter)
+                .statusBarsPadding()
+                .padding(top = 10.dp)
         ) {
             Surface(
                 onClick = {
                     toggleControlsVisibility()
                 },
                 shape = RoundedCornerShape(20.dp),
-                color = Color.Black.copy(alpha = 0.82f),
-                border = BorderStroke(1.2.dp, themeGoldAccent.copy(alpha = 0.85f)),
-                shadowElevation = 8.dp,
+                color = Color(0xDD141520),
+                border = BorderStroke(0.8.dp, Color.White.copy(alpha = 0.25f)),
+                shadowElevation = 4.dp,
                 modifier = Modifier.testTag("floating_open_channel_controls_button")
             ) {
                 Row(
@@ -776,22 +796,21 @@ fun LiveStreamingScreen(
             }
         }
 
-        // --- FORMAT MELAYANG / POP UP: PILIHAN CHANNEL DAN KELENGKAPANNYA (1 LAYAR & MULTI LAYAR) ---
+        // --- FORMAT MELAYANG / POP UP DIBUAT DITENGAH-TENGAH HORISONTAL & VERTIKAL (UKURAN ~3/4 PERANGKAT) ---
         AnimatedVisibility(
             visible = !isFullScreen && areControlsVisible,
-            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+            enter = fadeIn(),
+            exit = fadeOut(),
             modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .padding(horizontal = if (isLandscape) 14.dp else 8.dp)
-                .padding(bottom = if (isLandscape) 6.dp else 10.dp)
+                .align(Alignment.Center)
+                .fillMaxWidth(0.78f)
+                .padding(8.dp)
         ) {
             Surface(
-                shape = RoundedCornerShape(18.dp),
+                shape = RoundedCornerShape(20.dp),
                 color = themeControlBarBg.copy(alpha = 0.96f),
                 border = BorderStroke(
-                    1.2.dp,
+                    1.4.dp,
                     Brush.horizontalGradient(
                         listOf(
                             themeGoldSoft,
@@ -800,8 +819,8 @@ fun LiveStreamingScreen(
                         )
                     )
                 ),
-                shadowElevation = 16.dp,
-                tonalElevation = 8.dp,
+                shadowElevation = 20.dp,
+                tonalElevation = 10.dp,
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("floating_channel_controls_popup")
@@ -901,13 +920,14 @@ fun LiveStreamingScreen(
                         }
                     }
 
-                    // --- BAGIAN KONTROL LENGKAP (7 TOMBOL UTAMA) ---
+                    // --- BAGIAN KONTROL LENGKAP (TOMBOL UTAMA CONTROL BAR) ---
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState())
                             .padding(horizontal = 4.dp, vertical = 3.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                             // 1. Tombol Pemilihan Warna (Terang / Gelap / Default Perangkat)
                             Surface(
@@ -1081,6 +1101,37 @@ fun LiveStreamingScreen(
                                 Spacer(modifier = Modifier.width(3.dp))
                                 Text(
                                     text = currentMultiScreenMode.title,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = themeTextColor
+                                )
+                            }
+                        }
+
+                        // 6. Tombol Resolusi / Rasio Layar Video (Fit, Zoom, Fill, Fixed Width, Fixed Height)
+                        Surface(
+                            onClick = {
+                                recordUserInteraction()
+                                showAspectRatioDialog = true
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (isDark) Color(0xFF1B1C28) else Color(0xFFF3F5FA),
+                            border = BorderStroke(1.dp, themeGoldAccent.copy(alpha = 0.75f)),
+                            modifier = Modifier.testTag("video_aspect_ratio_button")
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.AspectRatio,
+                                    contentDescription = "Resolusi Layar Video",
+                                    tint = themeGoldAccent,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text(
+                                    text = currentAspectRatioMode.title,
                                     style = MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.Bold,
                                     color = themeTextColor
@@ -1676,6 +1727,158 @@ fun LiveStreamingScreen(
             }
         }
 
+        // Dialog Pemilihan Resolusi / Rasio Layar Video (Fit, Zoom, Fill, Fixed Width, Fixed Height)
+        if (showAspectRatioDialog) {
+            Dialog(
+                onDismissRequest = {
+                    recordUserInteraction()
+                    showAspectRatioDialog = false
+                },
+                properties = DialogProperties(usePlatformDefaultWidth = false)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .statusBarsPadding()
+                        .padding(horizontal = 24.dp, vertical = 40.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth(0.92f)
+                            .testTag("video_aspect_ratio_dialog"),
+                        shape = RoundedCornerShape(24.dp),
+                        color = themeControlBarBg,
+                        border = BorderStroke(1.4.dp, themeGoldAccent),
+                        tonalElevation = 10.dp,
+                        shadowElevation = 12.dp
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(20.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.AspectRatio,
+                                        contentDescription = null,
+                                        tint = themeGoldAccent,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Text(
+                                        text = "Pilih Resolusi Video",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = themeTextColor
+                                    )
+                                }
+                                IconButton(onClick = {
+                                    recordUserInteraction()
+                                    showAspectRatioDialog = false
+                                }) {
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = "Tutup",
+                                        tint = themeTextSecondary
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(14.dp))
+
+                            VideoAspectRatioMode.values().forEach { mode ->
+                                val isSelected = currentAspectRatioMode == mode
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp)
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .clickable {
+                                            currentAspectRatioMode = mode
+                                            recordUserInteraction()
+                                            showAspectRatioDialog = false
+                                            Toast.makeText(context, "Mode Resolusi: ${mode.title}", Toast.LENGTH_SHORT).show()
+                                        }
+                                        .testTag("aspect_ratio_option_${mode.name.lowercase()}"),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = if (isSelected) {
+                                            if (isDark) Color(0xFF332912) else Color(0xFFFFF6DF)
+                                        } else {
+                                            if (isDark) Color(0xFF1B1C28) else Color(0xFFF3F5FA)
+                                        }
+                                    ),
+                                    border = if (isSelected) BorderStroke(1.5.dp, themeGoldAccent)
+                                             else BorderStroke(0.6.dp, if (isDark) Color(0xFF33354A) else Color(0xFFD6DBE6))
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(36.dp)
+                                                    .clip(CircleShape)
+                                                    .background(
+                                                        if (isSelected) themeGoldAccent.copy(alpha = 0.2f)
+                                                        else if (isDark) Color(0xFF252636) else Color(0xFFE2E6F0)
+                                                    ),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.AspectRatio,
+                                                    contentDescription = null,
+                                                    tint = if (isSelected) themeGoldAccent else themeTextSecondary,
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                            }
+
+                                            Spacer(modifier = Modifier.width(12.dp))
+
+                                            Column {
+                                                Text(
+                                                    text = mode.title,
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Bold,
+                                                    color = if (isSelected) themeGoldAccent else themeTextColor
+                                                )
+                                                Text(
+                                                    text = mode.subtitle,
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = themeTextSecondary
+                                                )
+                                            }
+                                        }
+
+                                        if (isSelected) {
+                                            Icon(
+                                                imageVector = Icons.Default.Check,
+                                                contentDescription = "Dipilih",
+                                                tint = themeGoldAccent,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // Theme Selection Dialog (Terang / Gelap / Default Perangkat)
         if (showThemeDialog) {
             Dialog(
@@ -2217,6 +2420,7 @@ private fun SingleLivePlayerView(
     channelSwitchFeedback: String? = null,
     isFavorite: Boolean = false,
     onToggleFavorite: () -> Unit = {},
+    aspectRatioMode: VideoAspectRatioMode = VideoAspectRatioMode.FIT,
     modifier: Modifier = Modifier
 ) {
     var playbackSpeed by remember { mutableFloatStateOf(1.0f) }
@@ -2251,7 +2455,7 @@ private fun SingleLivePlayerView(
                 PlayerView(ctx).apply {
                     this.player = player
                     useController = false
-                    resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                    resizeMode = aspectRatioMode.resizeMode
                     setShutterBackgroundColor(android.graphics.Color.TRANSPARENT)
                     setKeepContentOnPlayerReset(true)
                 }
@@ -2259,6 +2463,9 @@ private fun SingleLivePlayerView(
             update = { view ->
                 if (view.player !== player) {
                     view.player = player
+                }
+                if (view.resizeMode != aspectRatioMode.resizeMode) {
+                    view.resizeMode = aspectRatioMode.resizeMode
                 }
             },
             onRelease = { view ->
