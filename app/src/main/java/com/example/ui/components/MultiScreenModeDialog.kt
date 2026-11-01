@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -252,6 +253,49 @@ fun MultiScreenModeDialog(
                                                     contentAlignment = Alignment.Center
                                                 ) {
                                                     Text("4", fontSize = 8.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+                                                }
+                                            }
+                                        }
+                                    }
+                                    MultiScreenMode.HEXA -> {
+                                        Column(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                                        ) {
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .weight(1f),
+                                                horizontalArrangement = Arrangement.spacedBy(2.dp)
+                                            ) {
+                                                listOf("1", "2", "3").forEach { label ->
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .weight(1f)
+                                                            .fillMaxHeight()
+                                                            .background(goldAccent.copy(alpha = 0.85f), RoundedCornerShape(2.dp)),
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        Text(label, fontSize = 7.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+                                                    }
+                                                }
+                                            }
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .weight(1f),
+                                                horizontalArrangement = Arrangement.spacedBy(2.dp)
+                                            ) {
+                                                listOf("4", "5", "6").forEach { label ->
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .weight(1f)
+                                                            .fillMaxHeight()
+                                                            .background(goldAccent.copy(alpha = 0.65f), RoundedCornerShape(2.dp)),
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        Text(label, fontSize = 7.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+                                                    }
                                                 }
                                             }
                                         }

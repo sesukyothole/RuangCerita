@@ -250,7 +250,7 @@ fun LiveStreamingScreen(
     var showAspectRatioDialog by remember { mutableStateOf(false) }
     var currentAspectRatioMode by remember { mutableStateOf(VideoAspectRatioMode.FIT) }
     var currentMultiScreenMode by remember { mutableStateOf(MultiScreenMode.SINGLE) }
-    var multiScreenChannels by remember { mutableStateOf<List<IptvChannel?>>(listOf(null, null, null, null)) }
+    var multiScreenChannels by remember { mutableStateOf<List<IptvChannel?>>(listOf(null, null, null, null, null, null)) }
     var activeAudioIndex by remember { mutableStateOf(0) }
     var pickerTargetScreenIndex by remember { mutableStateOf<Int?>(null) }
     var currentSortMode by remember { mutableStateOf(iptvRepository.getSavedSortMode(context)) }
@@ -457,7 +457,7 @@ fun LiveStreamingScreen(
         if (list.isNotEmpty()) {
             currentChannel = list.firstOrNull()
             // Multi-screen mode mewajibkan pengguna memilih channel masing-masing layar secara mandiri
-            multiScreenChannels = listOf(null, null, null, null)
+            multiScreenChannels = listOf(null, null, null, null, null, null)
         }
         isLoadingChannels = false
     }
@@ -484,16 +484,23 @@ fun LiveStreamingScreen(
         }
     }
 
-    // Group channels by Genre with Favorit tab
+    // Group channels by Genre with "Semua Channel" as fixed default first position, followed by Favorit tab
     val groupedGenres = remember(sortedChannels, favoriteChannels, currentSortMode) {
-        val map = mutableMapOf<String, List<IptvChannel>>()
+        val map = linkedMapOf<String, List<IptvChannel>>()
+        // 1. Posisi tetap: "Semua Channel" (All Channel) dimunculkan pertama agar daftar tidak kosong
+        map["Semua Channel"] = sortedChannels
+        // 2. Tab Favorit di posisi kedua
         map["⭐ Favorit"] = favoriteChannels
-        val normalGroups = sortedChannels.groupBy { it.genre.ifBlank { "Semua" } }
-        normalGroups.forEach { (genre, list) ->
-            map[genre] = when (currentSortMode) {
-                ChannelSortMode.ORIGINAL -> list
-                ChannelSortMode.ASCENDING -> list.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
-                ChannelSortMode.DESCENDING -> list.sortedWith(compareByDescending(String.CASE_INSENSITIVE_ORDER) { it.name })
+        // 3. Tab genre-genre lainnya
+        val normalGroups = sortedChannels.groupBy { it.genre.ifBlank { "Lainnya" } }
+        normalGroups.keys.sorted().forEach { genre ->
+            if (genre != "Semua Channel" && genre != "Semua" && genre != "⭐ Favorit") {
+                val list = normalGroups[genre] ?: emptyList()
+                map[genre] = when (currentSortMode) {
+                    ChannelSortMode.ORIGINAL -> list
+                    ChannelSortMode.ASCENDING -> list.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
+                    ChannelSortMode.DESCENDING -> list.sortedWith(compareByDescending(String.CASE_INSENSITIVE_ORDER) { it.name })
+                }
             }
         }
         map
@@ -524,12 +531,9 @@ fun LiveStreamingScreen(
         }
     }
 
-    val initialPageIndex = remember(sortedChannels, genreList) {
-        val currentGenre = currentChannel?.genre ?: genreList.firstOrNull() ?: ""
-        genreList.indexOf(currentGenre).coerceAtLeast(0)
-    }
+    // Posisi tetap "Semua Channel" (halaman 0) sebagai default saat membuka pilihan siaran
     val pagerState = rememberPagerState(
-        initialPage = initialPageIndex,
+        initialPage = 0,
         pageCount = { genreList.size }
     )
 
@@ -755,43 +759,167 @@ fun LiveStreamingScreen(
             }
         }
 
-        // Tombol Melayang Cepat Dipindahkan Ke Atas untuk Membuka Pilihan Channel & Kontrol saat Tersembunyi
+        // --- ATAS BAGIAN JUDUL APLIKASI, TOMBOL PILIHAN SIARAN & KONTROL, DAN TOMBOL CLOSE ---
         AnimatedVisibility(
-            visible = !areControlsVisible && !isFullScreen,
+            visible = if (isFullScreen) showControlsInFullScreen else true,
             enter = fadeIn() + slideInVertically(initialOffsetY = { -it }),
             exit = fadeOut() + slideOutVertically(targetOffsetY = { -it }),
             modifier = Modifier
                 .align(Alignment.TopCenter)
+                .fillMaxWidth()
                 .statusBarsPadding()
-                .padding(top = 10.dp)
+                .padding(start = 12.dp, top = 6.dp, end = 12.dp)
         ) {
             Surface(
-                onClick = {
-                    toggleControlsVisibility()
-                },
-                shape = RoundedCornerShape(20.dp),
-                color = Color(0xDD141520),
-                border = BorderStroke(0.8.dp, Color.White.copy(alpha = 0.25f)),
-                shadowElevation = 4.dp,
-                modifier = Modifier.testTag("floating_open_channel_controls_button")
+                shape = RoundedCornerShape(16.dp),
+                color = Color(0xDD10111A),
+                border = BorderStroke(
+                    1.dp,
+                    Brush.horizontalGradient(
+                        listOf(
+                            themeGoldSoft,
+                            themeGoldAccent.copy(alpha = 0.6f),
+                            themeGoldSoft
+                        )
+                    )
+                ),
+                shadowElevation = 8.dp,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("live_tv_top_watching_bar")
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Tv,
-                        contentDescription = null,
-                        tint = themeGoldAccent,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Text(
-                        text = "Pilihan Siaran & Kontrol",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
+                    // Bagian Kiri: Judul Nama Aplikasi "Ruang Cerita" + LIVE badge + Mode Layar
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clickable {
+                                recordUserInteraction()
+                                toggleControlsVisibility()
+                            }
+                            .testTag("top_bar_app_title_section")
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = themeGoldAccent.copy(alpha = 0.18f),
+                            border = BorderStroke(1.dp, themeGoldAccent),
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.LiveTv,
+                                    contentDescription = null,
+                                    tint = themeGoldAccent,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "Ruang Cerita",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = Color.White
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = Color(0xFFE50914),
+                                    modifier = Modifier.padding(horizontal = 2.dp)
+                                ) {
+                                    Text(
+                                        text = "LIVE",
+                                        color = Color.White,
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Black,
+                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                                    )
+                                }
+                            }
+                            Text(
+                                text = "Live TV • ${currentMultiScreenMode.title}",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontSize = 10.sp,
+                                color = themeGoldAccent.copy(alpha = 0.9f)
+                            )
+                        }
+                    }
+
+                    // Bagian Kanan: Tombol Pilihan Siaran & Kontrol dan Tombol Close
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // Tombol Pilihan Siaran & Kontrol
+                        Surface(
+                            onClick = {
+                                recordUserInteraction()
+                                toggleControlsVisibility()
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (areControlsVisible) themeGoldAccent else Color(0x2EFFFFFF),
+                            border = BorderStroke(1.dp, if (areControlsVisible) themeGoldAccent else themeGoldAccent.copy(alpha = 0.6f)),
+                            modifier = Modifier.testTag("floating_open_channel_controls_button")
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Tv,
+                                    contentDescription = null,
+                                    tint = if (areControlsVisible) Color.Black else themeGoldAccent,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Text(
+                                    text = "Pilihan Siaran & Kontrol",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (areControlsVisible) Color.Black else Color.White
+                                )
+                            }
+                        }
+
+                        // Tombol Close (Tutup / Akhiri Menonton)
+                        Surface(
+                            onClick = {
+                                recordUserInteraction()
+                                onCloseToDashboard()
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            color = Color(0x3DFF3B30),
+                            border = BorderStroke(1.dp, Color(0xFFFF453A)),
+                            modifier = Modifier.testTag("live_tv_close_watching_button")
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Tutup / Akhiri Menonton",
+                                    tint = Color(0xFFFF5252),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Text(
+                                    text = "Tutup",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -1093,6 +1221,7 @@ fun LiveStreamingScreen(
                                         MultiScreenMode.SINGLE -> Icons.Default.Tv
                                         MultiScreenMode.DUAL -> Icons.Default.Splitscreen
                                         MultiScreenMode.QUAD -> Icons.Default.GridView
+                                        MultiScreenMode.HEXA -> Icons.Default.GridView
                                     },
                                     contentDescription = "Mode Multi Layar",
                                     tint = themeGoldAccent,
@@ -1231,7 +1360,7 @@ fun LiveStreamingScreen(
                             .fillMaxWidth()
                             .weight(1f)
                     ) { page ->
-                        val currentGenreName = genreList.getOrNull(page) ?: "Semua"
+                        val currentGenreName = genreList.getOrNull(page) ?: "Semua Channel"
                         val genreChannels = groupedGenres[currentGenreName] ?: emptyList()
 
                         if (genreChannels.isEmpty()) {
@@ -2335,7 +2464,7 @@ fun LiveStreamingScreen(
                     currentMultiScreenMode = newMode
                     if (newMode != MultiScreenMode.SINGLE && newMode != oldMode) {
                         // Pengguna diwajibkan memilih channel masing-masing layar secara mandiri
-                        multiScreenChannels = listOf(null, null, null, null)
+                        multiScreenChannels = listOf(null, null, null, null, null, null)
                         activeAudioIndex = 0
                         // Buka otomatis kotak pilihan channel untuk Layar 1
                         pickerTargetScreenIndex = 0

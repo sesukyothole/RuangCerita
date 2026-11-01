@@ -83,11 +83,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun loginAdmin(user: String, pass: String): Boolean {
-        if (user.trim() == "admin" && pass.trim() == "admin") {
+        if (com.example.data.SecurityPinManager.verifyAdminCredentials(user, pass)) {
             _isAdminLoggedIn.value = true
             return true
         }
         return false
+    }
+
+    fun changeSecurityPin(user: String, pass: String, oldPin: String, newPin: String): Result<Unit> {
+        if (!com.example.data.SecurityPinManager.verifyAdminCredentials(user, pass)) {
+            return Result.failure(IllegalArgumentException("Username atau Password Admin salah!"))
+        }
+        if (!com.example.data.SecurityPinManager.verifyPin(getApplication(), oldPin)) {
+            return Result.failure(IllegalArgumentException("PIN Lama tidak sesuai!"))
+        }
+        val cleanNewPin = newPin.trim()
+        if (cleanNewPin.length != 4 || !cleanNewPin.all { it.isDigit() }) {
+            return Result.failure(IllegalArgumentException("PIN Baru harus terdiri dari 4 digit angka!"))
+        }
+        val success = com.example.data.SecurityPinManager.setPin(getApplication(), cleanNewPin)
+        return if (success) {
+            _isAdminLoggedIn.value = true
+            Result.success(Unit)
+        } else {
+            Result.failure(IllegalStateException("Gagal menyimpan PIN baru."))
+        }
     }
 
     fun logoutAdmin() {

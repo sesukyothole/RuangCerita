@@ -48,6 +48,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -289,6 +290,175 @@ fun MultiScreenPlayerLayout(
                                 aspectRatioMode = aspectRatioMode,
                                 modifier = Modifier.fillMaxSize()
                             )
+                        }
+                    }
+                }
+            }
+            MultiScreenMode.HEXA -> {
+                // Mode 6 Layar:
+                // Pada landscape: 2 baris x 3 kolom (Layar 1-3 atas, Layar 4-6 bawah)
+                // Pada portrait: 3 baris x 2 kolom (Layar 1-2 atas, Layar 3-4 tengah, Layar 5-6 bawah)
+                val configuration = LocalConfiguration.current
+                val isLandscape = configuration.screenWidthDp > configuration.screenHeightDp
+
+                if (isLandscape) {
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        // Baris Atas: Layar 1, 2, 3
+                        Row(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth()
+                        ) {
+                            for (col in 0..2) {
+                                val sIndex = col
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxHeight()
+                                ) {
+                                    SingleMultiScreenPane(
+                                        screenIndex = sIndex,
+                                        screenTitle = "Layar ${sIndex + 1}",
+                                        channel = screenChannels.getOrNull(sIndex),
+                                        isAudioActive = (activeAudioIndex == sIndex),
+                                        volumeLevel = volumeLevel,
+                                        onSelectAudio = { onSelectAudioIndex(sIndex) },
+                                        onRequestChannelPicker = { onRequestChannelPicker(sIndex) },
+                                        onPreviousChannel = { onPreviousChannel(sIndex) },
+                                        onNextChannel = { onNextChannel(sIndex) },
+                                        onToggleControls = onToggleControls,
+                                        aspectRatioMode = aspectRatioMode,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                }
+                                if (col < 2) {
+                                    Box(
+                                        modifier = Modifier
+                                            .width(2.dp)
+                                            .fillMaxHeight()
+                                            .background(
+                                                Brush.verticalGradient(
+                                                    listOf(Color(0x33FFD700), Color(0xFFFFD700), Color(0x33FFD700))
+                                                )
+                                            )
+                                    )
+                                }
+                            }
+                        }
+
+                        // Divider horizontal tengah
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(2.dp)
+                                .background(
+                                    Brush.horizontalGradient(
+                                        listOf(Color(0x33FFD700), Color(0xFFFFD700), Color(0x33FFD700))
+                                    )
+                                )
+                        )
+
+                        // Baris Bawah: Layar 4, 5, 6
+                        Row(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth()
+                        ) {
+                            for (col in 3..5) {
+                                val sIndex = col
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxHeight()
+                                ) {
+                                    SingleMultiScreenPane(
+                                        screenIndex = sIndex,
+                                        screenTitle = "Layar ${sIndex + 1}",
+                                        channel = screenChannels.getOrNull(sIndex),
+                                        isAudioActive = (activeAudioIndex == sIndex),
+                                        volumeLevel = volumeLevel,
+                                        onSelectAudio = { onSelectAudioIndex(sIndex) },
+                                        onRequestChannelPicker = { onRequestChannelPicker(sIndex) },
+                                        onPreviousChannel = { onPreviousChannel(sIndex) },
+                                        onNextChannel = { onNextChannel(sIndex) },
+                                        onToggleControls = onToggleControls,
+                                        aspectRatioMode = aspectRatioMode,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                }
+                                if (col < 5) {
+                                    Box(
+                                        modifier = Modifier
+                                            .width(2.dp)
+                                            .fillMaxHeight()
+                                            .background(
+                                                Brush.verticalGradient(
+                                                    listOf(Color(0x33FFD700), Color(0xFFFFD700), Color(0x33FFD700))
+                                                )
+                                            )
+                                    )
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    // Portrait: 3 baris x 2 kolom
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        for (row in 0..2) {
+                            val startIdx = row * 2
+                            Row(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxWidth()
+                            ) {
+                                for (col in 0..1) {
+                                    val sIndex = startIdx + col
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .fillMaxHeight()
+                                    ) {
+                                        SingleMultiScreenPane(
+                                            screenIndex = sIndex,
+                                            screenTitle = "Layar ${sIndex + 1}",
+                                            channel = screenChannels.getOrNull(sIndex),
+                                            isAudioActive = (activeAudioIndex == sIndex),
+                                            volumeLevel = volumeLevel,
+                                            onSelectAudio = { onSelectAudioIndex(sIndex) },
+                                            onRequestChannelPicker = { onRequestChannelPicker(sIndex) },
+                                            onPreviousChannel = { onPreviousChannel(sIndex) },
+                                            onNextChannel = { onNextChannel(sIndex) },
+                                            onToggleControls = onToggleControls,
+                                            aspectRatioMode = aspectRatioMode,
+                                            modifier = Modifier.fillMaxSize()
+                                        )
+                                    }
+                                    if (col == 0) {
+                                        Box(
+                                            modifier = Modifier
+                                                .width(2.dp)
+                                                .fillMaxHeight()
+                                                .background(
+                                                    Brush.verticalGradient(
+                                                        listOf(Color(0x33FFD700), Color(0xFFFFD700), Color(0x33FFD700))
+                                                    )
+                                                )
+                                        )
+                                    }
+                                }
+                            }
+                            if (row < 2) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(2.dp)
+                                        .background(
+                                            Brush.horizontalGradient(
+                                                listOf(Color(0x33FFD700), Color(0xFFFFD700), Color(0x33FFD700))
+                                            )
+                                        )
+                                )
+                            }
                         }
                     }
                 }

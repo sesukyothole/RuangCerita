@@ -74,7 +74,7 @@ fun ChannelPickerPopupDialog(
     isDark: Boolean = true
 ) {
     var searchQuery by remember { mutableStateOf("") }
-    var selectedGenre by remember { mutableStateOf("Semua") }
+    var selectedGenre by remember { mutableStateOf("Semua Channel") }
 
     val goldAccent = if (isDark) Color(0xFFFFD700) else Color(0xFFB8860B)
     val goldSoft = if (isDark) Color(0x33D4AF37) else Color(0x22B8860B)
@@ -83,13 +83,13 @@ fun ChannelPickerPopupDialog(
     val textColor = if (isDark) Color.White else Color(0xFF181920)
     val textSecondary = if (isDark) Color.LightGray else Color(0xFF555866)
 
-    // Build unique genres list
+    // Build unique genres list dengan "Semua Channel" sebagai posisi tetap pertama
     val genres = remember(channels, favoriteChannelIds) {
-        val list = mutableListOf("Semua")
-        if (favoriteChannelIds.isNotEmpty()) {
-            list.add("⭐ Favorit")
-        }
-        val distinctGenres = channels.map { it.genre.ifBlank { "Lainnya" } }.distinct().sorted()
+        val list = mutableListOf("Semua Channel", "⭐ Favorit")
+        val distinctGenres = channels.map { it.genre.ifBlank { "Lainnya" } }
+            .filter { it != "Semua Channel" && it != "Semua" && it != "⭐ Favorit" }
+            .distinct()
+            .sorted()
         list.addAll(distinctGenres)
         list
     }
@@ -98,7 +98,7 @@ fun ChannelPickerPopupDialog(
     val filteredChannels = remember(channels, searchQuery, selectedGenre, favoriteChannelIds) {
         channels.filter { channel ->
             val matchGenre = when (selectedGenre) {
-                "Semua" -> true
+                "Semua Channel", "Semua" -> true
                 "⭐ Favorit" -> favoriteChannelIds.contains(channel.id)
                 else -> channel.genre.equals(selectedGenre, ignoreCase = true)
             }
@@ -287,9 +287,12 @@ fun ChannelPickerPopupDialog(
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = "Tidak ada channel ditemukan",
+                                text = if (selectedGenre == "⭐ Favorit") "Belum ada channel favorit.\nKetuk ikon ⭐ pada channel untuk menambahkannya!"
+                                       else "Tidak ada channel ditemukan",
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = textSecondary
+                                color = textSecondary,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(horizontal = 16.dp)
                             )
                         }
                     }

@@ -33,6 +33,7 @@ import androidx.compose.foundation.verticalScroll
 import android.app.Activity
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Book
@@ -127,6 +128,7 @@ fun DashboardScreen(
     onToggleFavorite: (StoryEntity) -> Unit,
     onOpenModeBacaSettings: () -> Unit,
     onUpdateGenre: (String, String) -> Unit = { _, _ -> },
+    onOpenAdminChangePin: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -278,7 +280,30 @@ fun DashboardScreen(
                             }
                         }
 
-                        // 4. Close App Icon Button
+                        // 4. Admin Change PIN Icon Button
+                        Surface(
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            shape = CircleShape,
+                            shadowElevation = 2.dp,
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .clickable { onOpenAdminChangePin() }
+                                .testTag("dashboard_admin_pin_button")
+                        ) {
+                            Box(
+                                modifier = Modifier.padding(10.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.AdminPanelSettings,
+                                    contentDescription = "Ubah PIN Admin",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+
+                        // 5. Close App Icon Button
                         Surface(
                             color = MaterialTheme.colorScheme.errorContainer,
                             shape = CircleShape,

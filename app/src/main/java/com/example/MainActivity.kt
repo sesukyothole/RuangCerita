@@ -68,6 +68,8 @@ import com.example.ui.MainViewModel
 import com.example.ui.components.GreetingOverlay
 import com.example.ui.components.ReaderSettingsSheet
 import com.example.ui.components.StoryPinDialog
+import com.example.ui.components.DashboardPinDialog
+import com.example.ui.components.AdminChangePinDialog
 import com.example.ui.screens.BookmarksScreen
 import com.example.ui.screens.DashboardScreen
 import com.example.ui.screens.LiveStreamingScreen
@@ -146,10 +148,12 @@ fun RuangCeritaApp(viewModel: MainViewModel) {
         com.example.data.AppThemeMode.DARK -> true
     }
 
-    var selectedBottomTab by remember { mutableIntStateOf(1) }
+    var selectedBottomTab by remember { mutableIntStateOf(0) }
     var isLiveTvControlsVisible by remember { mutableStateOf(true) }
     var showGlobalReaderSettingsSheet by remember { mutableStateOf(false) }
-    var showPinDialogForCerita by remember { mutableStateOf(false) }
+    var isAgeVerifiedForDashboard by remember { mutableStateOf(false) }
+    var showPinDialogForDashboard by remember { mutableStateOf(false) }
+    var showAdminChangePinDialog by remember { mutableStateOf(false) }
 
     val activeStory = remember(currentStoryId, stories, favoriteStories) {
         currentStoryId?.let { id ->
@@ -159,11 +163,43 @@ fun RuangCeritaApp(viewModel: MainViewModel) {
 
     // 1. Initial Greeting Overlay Screen ("Ketika aplikasi dibuka muncul ucapan selamat datang...")
     if (showWelcomeBanner) {
-        GreetingOverlay(
-            onEnterDashboard = {
-                viewModel.dismissWelcomeBanner()
+        Box(modifier = Modifier.fillMaxSize()) {
+            GreetingOverlay(
+                onEnterDashboard = {
+                    showPinDialogForDashboard = true
+                }
+            )
+
+            // Dialog Verifikasi PIN Usia Dewasa (17+) sewaktu akan masuk ke dashboard
+            if (showPinDialogForDashboard) {
+                DashboardPinDialog(
+                    isDark = isDark,
+                    onDismiss = {
+                        (context as? Activity)?.finish()
+                    },
+                    onPinCorrect = {
+                        isAgeVerifiedForDashboard = true
+                        showPinDialogForDashboard = false
+                        selectedBottomTab = 0
+                        viewModel.dismissWelcomeBanner()
+                    },
+                    onOpenAdminChangePin = {
+                        showAdminChangePinDialog = true
+                    }
+                )
             }
-        )
+
+            // Dialog Khusus Admin untuk Mengubah PIN Lama Menjadi PIN Baru
+            if (showAdminChangePinDialog) {
+                AdminChangePinDialog(
+                    isDark = isDark,
+                    onDismiss = { showAdminChangePinDialog = false },
+                    onPinChanged = {
+                        showAdminChangePinDialog = false
+                    }
+                )
+            }
+        }
         return
     }
 
@@ -246,8 +282,10 @@ fun RuangCeritaApp(viewModel: MainViewModel) {
                     val isCeritaSelected = selectedBottomTab == 0
                     Surface(
                         onClick = {
-                            if (selectedBottomTab != 0) {
-                                showPinDialogForCerita = true
+                            if (!isAgeVerifiedForDashboard) {
+                                showPinDialogForDashboard = true
+                            } else {
+                                selectedBottomTab = 0
                             }
                         },
                         shape = RoundedCornerShape(10.dp),
@@ -411,26 +449,48 @@ fun RuangCeritaApp(viewModel: MainViewModel) {
                         onOpenStory = { viewModel.openStoryReader(it) },
                         onToggleFavorite = { viewModel.toggleFavorite(it) },
                         onOpenModeBacaSettings = { showGlobalReaderSettingsSheet = true },
-                        onUpdateGenre = { storyId, newGenre -> viewModel.updateStoryGenre(storyId, newGenre) }
+                        onUpdateGenre = { storyId, newGenre -> viewModel.updateStoryGenre(storyId, newGenre) },
+                        onOpenAdminChangePin = { showAdminChangePinDialog = true }
                     )
                 }
 
                 else -> LiveStreamingScreen(
-                    onCloseToDashboard = { showPinDialogForCerita = true },
+                    onCloseToDashboard = {
+                        if (!isAgeVerifiedForDashboard) {
+                            showPinDialogForDashboard = true
+                        } else {
+                            selectedBottomTab = 0
+                        }
+                    },
                     currentThemeMode = appThemeMode,
                     onThemeModeChange = { viewModel.setAppThemeMode(it) },
                     onControlsVisibilityChange = { isLiveTvControlsVisible = it }
                 )
             }
 
-            // Dialog Verifikasi PIN Usia Dewasa (17+) untuk Tombol Cerita
-            if (showPinDialogForCerita) {
-                StoryPinDialog(
+            // Dialog Verifikasi PIN Usia Dewasa (17+) sewaktu akan masuk ke dashboard
+            if (showPinDialogForDashboard) {
+                DashboardPinDialog(
                     isDark = isDark,
-                    onDismiss = { showPinDialogForCerita = false },
+                    onDismiss = { showPinDialogForDashboard = false },
                     onPinCorrect = {
-                        showPinDialogForCerita = false
+                        isAgeVerifiedForDashboard = true
+                        showPinDialogForDashboard = false
                         selectedBottomTab = 0
+                    },
+                    onOpenAdminChangePin = {
+                        showAdminChangePinDialog = true
+                    }
+                )
+            }
+
+            // Dialog Khusus Admin untuk Mengubah PIN Lama Menjadi PIN Baru
+            if (showAdminChangePinDialog) {
+                AdminChangePinDialog(
+                    isDark = isDark,
+                    onDismiss = { showAdminChangePinDialog = false },
+                    onPinChanged = {
+                        showAdminChangePinDialog = false
                     }
                 )
             }
