@@ -51,6 +51,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -109,6 +110,15 @@ fun ChannelPickerPopupDialog(
         }
     }
 
+    val configuration = LocalConfiguration.current
+    val screenHeightDp = configuration.screenHeightDp
+    val screenWidthDp = configuration.screenWidthDp
+    val isLandscape = screenWidthDp > screenHeightDp
+
+    // Ukuran pop up khususnya tinggi dibuat lebih tinggi (86% dari tinggi layar) dan disesuaikan dengan spek perangkat
+    val dialogHeight = (screenHeightDp * 0.86f).dp
+    val dialogWidth = if (isLandscape) (screenWidthDp * 0.88f).dp else (screenWidthDp * 0.94f).dp
+
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -123,8 +133,8 @@ fun ChannelPickerPopupDialog(
             tonalElevation = 10.dp,
             shadowElevation = 16.dp,
             modifier = Modifier
-                .fillMaxWidth(0.92f)
-                .heightIn(max = 580.dp)
+                .width(dialogWidth)
+                .height(dialogHeight)
                 .testTag("channel_picker_popup_dialog")
         ) {
             Column(

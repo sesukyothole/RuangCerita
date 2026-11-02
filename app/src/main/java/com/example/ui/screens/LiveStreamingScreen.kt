@@ -128,6 +128,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
@@ -759,31 +760,31 @@ fun LiveStreamingScreen(
             }
         }
 
-        // --- ATAS BAGIAN JUDUL APLIKASI, TOMBOL PILIHAN SIARAN & KONTROL, DAN TOMBOL CLOSE ---
+        // --- ATAS BAGIAN JUDUL APLIKASI, SEMUA KONTROL LENGKAP DALAM 1 BARIS SERAGAM, DAN TOMBOL CLOSE ---
         AnimatedVisibility(
-            visible = if (isFullScreen) showControlsInFullScreen else true,
+            visible = if (isFullScreen) showControlsInFullScreen else areControlsVisible,
             enter = fadeIn() + slideInVertically(initialOffsetY = { -it }),
             exit = fadeOut() + slideOutVertically(targetOffsetY = { -it }),
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .fillMaxWidth()
                 .statusBarsPadding()
-                .padding(start = 12.dp, top = 6.dp, end = 12.dp)
+                .padding(start = 10.dp, top = 6.dp, end = 10.dp)
         ) {
             Surface(
                 shape = RoundedCornerShape(16.dp),
-                color = Color(0xDD10111A),
+                color = Color(0xEE10111A),
                 border = BorderStroke(
-                    1.dp,
+                    1.2.dp,
                     Brush.horizontalGradient(
                         listOf(
                             themeGoldSoft,
-                            themeGoldAccent.copy(alpha = 0.6f),
+                            themeGoldAccent.copy(alpha = 0.7f),
                             themeGoldSoft
                         )
                     )
                 ),
-                shadowElevation = 8.dp,
+                shadowElevation = 10.dp,
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("live_tv_top_watching_bar")
@@ -791,17 +792,17 @@ fun LiveStreamingScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // Bagian Kiri: Judul Nama Aplikasi "Ruang Cerita" + LIVE badge + Mode Layar
+                    // Bagian Kiri: Judul Nama Aplikasi "Ruang Cerita" + LIVE badge
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .clickable {
                                 recordUserInteraction()
-                                toggleControlsVisibility()
+                                pickerTargetScreenIndex = activeAudioIndex.coerceIn(0, currentMultiScreenMode.count - 1)
                             }
                             .testTag("top_bar_app_title_section")
                     ) {
@@ -816,11 +817,11 @@ fun LiveStreamingScreen(
                                     imageVector = Icons.Default.LiveTv,
                                     contentDescription = null,
                                     tint = themeGoldAccent,
-                                    modifier = Modifier.size(18.dp)
+                                    modifier = Modifier.size(17.dp)
                                 )
                             }
                         }
-                        Spacer(modifier = Modifier.width(10.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
                         Column {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
@@ -829,7 +830,7 @@ fun LiveStreamingScreen(
                                     fontWeight = FontWeight.ExtraBold,
                                     color = Color.White
                                 )
-                                Spacer(modifier = Modifier.width(6.dp))
+                                Spacer(modifier = Modifier.width(5.dp))
                                 Surface(
                                     shape = RoundedCornerShape(4.dp),
                                     color = Color(0xFFE50914),
@@ -838,703 +839,237 @@ fun LiveStreamingScreen(
                                     Text(
                                         text = "LIVE",
                                         color = Color.White,
-                                        fontSize = 9.sp,
+                                        fontSize = 8.5.sp,
                                         fontWeight = FontWeight.Black,
-                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                                     )
                                 }
                             }
                             Text(
                                 text = "Live TV • ${currentMultiScreenMode.title}",
                                 style = MaterialTheme.typography.labelSmall,
-                                fontSize = 10.sp,
+                                fontSize = 9.5.sp,
                                 color = themeGoldAccent.copy(alpha = 0.9f)
                             )
                         }
                     }
 
-                    // Bagian Kanan: Tombol Pilihan Siaran & Kontrol dan Tombol Close
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        // Tombol Pilihan Siaran & Kontrol
-                        Surface(
-                            onClick = {
-                                recordUserInteraction()
-                                toggleControlsVisibility()
-                            },
-                            shape = RoundedCornerShape(12.dp),
-                            color = if (areControlsVisible) themeGoldAccent else Color(0x2EFFFFFF),
-                            border = BorderStroke(1.dp, if (areControlsVisible) themeGoldAccent else themeGoldAccent.copy(alpha = 0.6f)),
-                            modifier = Modifier.testTag("floating_open_channel_controls_button")
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Tv,
-                                    contentDescription = null,
-                                    tint = if (areControlsVisible) Color.Black else themeGoldAccent,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Text(
-                                    text = "Pilihan Siaran & Kontrol",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (areControlsVisible) Color.Black else Color.White
-                                )
-                            }
-                        }
+                    Spacer(modifier = Modifier.width(8.dp))
 
-                        // Tombol Close (Tutup / Akhiri Menonton)
-                        Surface(
-                            onClick = {
-                                recordUserInteraction()
-                                onCloseToDashboard()
-                            },
-                            shape = RoundedCornerShape(12.dp),
-                            color = Color(0x3DFF3B30),
-                            border = BorderStroke(1.dp, Color(0xFFFF453A)),
-                            modifier = Modifier.testTag("live_tv_close_watching_button")
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Close,
-                                    contentDescription = "Tutup / Akhiri Menonton",
-                                    tint = Color(0xFFFF5252),
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Text(
-                                    text = "Tutup",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // --- FORMAT MELAYANG / POP UP DIBUAT DITENGAH-TENGAH HORISONTAL & VERTIKAL (UKURAN ~3/4 PERANGKAT) ---
-        AnimatedVisibility(
-            visible = !isFullScreen && areControlsVisible,
-            enter = fadeIn(),
-            exit = fadeOut(),
-            modifier = Modifier
-                .align(Alignment.Center)
-                .fillMaxWidth(0.78f)
-                .padding(8.dp)
-        ) {
-            Surface(
-                shape = RoundedCornerShape(20.dp),
-                color = themeControlBarBg.copy(alpha = 0.96f),
-                border = BorderStroke(
-                    1.4.dp,
-                    Brush.horizontalGradient(
-                        listOf(
-                            themeGoldSoft,
-                            themeGoldAccent,
-                            themeGoldSoft
-                        )
-                    )
-                ),
-                shadowElevation = 20.dp,
-                tonalElevation = 10.dp,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("floating_channel_controls_popup")
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 4.dp, bottom = 4.dp, start = 6.dp, end = 6.dp)
-                ) {
-                    // Header Pop-up Melayang: Judul dan Tombol Tutup (✕)
+                    // Bagian Tengah: Satu Baris Kontrol Lengkap (Scrollable Row dengan Ukuran Box & Tulisan Seragam)
                     Row(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 8.dp, vertical = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.LiveTv,
-                                contentDescription = null,
-                                tint = themeGoldAccent,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = if (currentMultiScreenMode == MultiScreenMode.SINGLE)
-                                    "Pilihan Channel & Kontrol Siaran"
-                                else
-                                    "Pilihan Channel & Kontrol Multi Layar (${currentMultiScreenMode.title})",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = themeTextColor
-                            )
-                        }
-
-                        IconButton(
-                            onClick = {
-                                areControlsVisible = false
-                                onControlsVisibilityChange(false)
-                            },
-                            modifier = Modifier
-                                .size(26.dp)
-                                .testTag("close_floating_controls_button")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = "Tutup Pilihan Channel",
-                                tint = themeTextSecondary,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                    }
-
-                    // Baris Pemilihan Target Layar (Khusus saat Mode Multi Layar Aktif)
-                    if (currentMultiScreenMode != MultiScreenMode.SINGLE) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 6.dp, vertical = 2.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Pilih Untuk:",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = themeGoldAccent
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            (0 until currentMultiScreenMode.count).forEach { screenIdx ->
-                                val isTarget = (activeAudioIndex == screenIdx)
-                                val hasChannel = multiScreenChannels.getOrNull(screenIdx) != null
-                                Surface(
-                                    onClick = {
-                                        activeAudioIndex = screenIdx
-                                        recordUserInteraction()
-                                    },
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = if (isTarget) themeGoldAccent else (if (isDark) Color(0xFF222436) else Color(0xFFE2E6F0)),
-                                    border = BorderStroke(
-                                        0.8.dp,
-                                        if (isTarget) themeGoldAccent else (if (isDark) Color(0xFF3B3E5B) else Color(0xFFCBD2E1))
-                                    ),
-                                    modifier = Modifier
-                                        .padding(end = 6.dp)
-                                        .testTag("target_screen_chip_${screenIdx + 1}")
-                                ) {
-                                    Text(
-                                        text = "Layar ${screenIdx + 1}${if (hasChannel) " (${multiScreenChannels[screenIdx]?.name?.take(8) ?: "✓"})" else " (Kosong)"}",
-                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
-                                        fontWeight = if (isTarget) FontWeight.ExtraBold else FontWeight.Medium,
-                                        color = if (isTarget) Color.Black else themeTextColor,
-                                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    // --- BAGIAN KONTROL LENGKAP (TOMBOL UTAMA CONTROL BAR) ---
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
+                            .weight(1f)
                             .horizontalScroll(rememberScrollState())
-                            .padding(horizontal = 4.dp, vertical = 3.dp),
+                            .padding(horizontal = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                            // 1. Tombol Pemilihan Warna (Terang / Gelap / Default Perangkat)
-                            Surface(
-                                onClick = {
-                                    recordUserInteraction()
-                                    showThemeDialog = true
-                                },
-                                shape = RoundedCornerShape(10.dp),
-                                color = if (isDark) Color(0xFF1B1C28) else Color(0xFFF3F5FA),
-                                border = BorderStroke(1.dp, themeGoldAccent.copy(alpha = 0.75f)),
-                                modifier = Modifier.testTag("theme_selector_button")
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        imageVector = when (currentThemeMode) {
-                                            AppThemeMode.LIGHT -> Icons.Default.LightMode
-                                            AppThemeMode.DARK -> Icons.Default.DarkMode
-                                            AppThemeMode.SYSTEM -> Icons.Default.BrightnessAuto
-                                        },
-                                        contentDescription = "Pilihan Warna",
-                                        tint = themeGoldAccent,
-                                        modifier = Modifier.size(15.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = when (currentThemeMode) {
-                                            AppThemeMode.LIGHT -> "Terang"
-                                            AppThemeMode.DARK -> "Gelap"
-                                            AppThemeMode.SYSTEM -> "Sistem"
-                                        },
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = themeTextColor
-                                    )
-                                }
-                            }
+                        // 1. Tombol Pemilihan Channel
+                        UniformTopBarButton(
+                            icon = Icons.Default.Tv,
+                            label = "Pilihan Channel",
+                            onClick = {
+                                recordUserInteraction()
+                                pickerTargetScreenIndex = activeAudioIndex.coerceIn(0, currentMultiScreenMode.count - 1)
+                            },
+                            isSelected = true,
+                            testTag = "floating_open_channel_controls_button",
+                            themeGoldAccent = themeGoldAccent,
+                            themeTextColor = themeTextColor,
+                            isDark = isDark
+                        )
 
-                            // 2. Tombol Mode Orientasi Layar (Portait, Landscape, Automatic)
-                            Surface(
-                                onClick = {
-                                    recordUserInteraction()
-                                    showOrientationDialog = true
-                                },
-                                shape = RoundedCornerShape(10.dp),
-                                color = if (isDark) Color(0xFF1B1C28) else Color(0xFFF3F5FA),
-                                border = BorderStroke(1.dp, themeGoldAccent.copy(alpha = 0.75f)),
-                                modifier = Modifier.testTag("orientation_selector_button")
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 5.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        imageVector = when (currentOrientationMode) {
-                                            AppOrientationMode.AUTO -> Icons.Default.ScreenRotation
-                                            AppOrientationMode.PORTRAIT -> Icons.Default.StayCurrentPortrait
-                                            AppOrientationMode.LANDSCAPE -> Icons.Default.StayCurrentLandscape
-                                        },
-                                        contentDescription = "Mode Orientasi Layar",
-                                        tint = themeGoldAccent,
-                                        modifier = Modifier.size(15.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(3.dp))
-                                    Text(
-                                        text = currentOrientationMode.title,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = themeTextColor
-                                    )
-                                }
-                            }
+                        // 2. Chip Target Layar (Khusus saat Mode Multi Layar)
+                        if (currentMultiScreenMode != MultiScreenMode.SINGLE) {
+                            (0 until currentMultiScreenMode.count).forEach { screenIdx ->
+                                val isTarget = (activeAudioIndex == screenIdx)
+                                val ch = multiScreenChannels.getOrNull(screenIdx)
+                                val hasChannel = ch != null
+                                val labelText = "Layar ${screenIdx + 1}${if (hasChannel) " (${ch?.name?.take(6)})" else ""}"
 
-                            // 3. Tombol Urutkan Channel (Ascending, Descending, Urutan Asli Playlist)
-                            Surface(
-                                onClick = {
-                                    recordUserInteraction()
-                                    showSortDialog = true
-                                },
-                                shape = RoundedCornerShape(10.dp),
-                                color = if (isDark) Color(0xFF1B1C28) else Color(0xFFF3F5FA),
-                                border = BorderStroke(1.dp, themeGoldAccent.copy(alpha = 0.75f)),
-                                modifier = Modifier.testTag("channel_sort_button")
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 5.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        imageVector = when (currentSortMode) {
-                                            ChannelSortMode.ORIGINAL -> Icons.Default.FormatListNumbered
-                                            ChannelSortMode.ASCENDING -> Icons.Default.ArrowUpward
-                                            ChannelSortMode.DESCENDING -> Icons.Default.ArrowDownward
-                                        },
-                                        contentDescription = "Urutan Channel",
-                                        tint = themeGoldAccent,
-                                        modifier = Modifier.size(15.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(3.dp))
-                                    Text(
-                                        text = when (currentSortMode) {
-                                            ChannelSortMode.ORIGINAL -> "Asli"
-                                            ChannelSortMode.ASCENDING -> "A - Z"
-                                            ChannelSortMode.DESCENDING -> "Z - A"
-                                        },
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = themeTextColor
-                                    )
-                                }
-                            }
-
-                            // 4. Audio & Volume Button
-                            Surface(
-                                onClick = {
-                                    recordUserInteraction()
-                                    showAudioVolumeDialog = true
-                                },
-                                shape = RoundedCornerShape(10.dp),
-                                color = if (isDark) Color(0xFF1B1C28) else Color(0xFFF3F5FA),
-                                border = BorderStroke(0.6.dp, if (isDark) Color(0xFF444760) else Color(0xFFCFD5E2)),
-                                modifier = Modifier.testTag("audio_volume_button")
-                            ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 5.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = if (volumeLevel == 0f) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
-                                    contentDescription = "Audio Volume",
-                                    tint = if (volumeLevel == 0f) Color.Gray else themeGoldAccent,
-                                    modifier = Modifier.size(15.dp)
-                                )
-                                Spacer(modifier = Modifier.width(3.dp))
-                                Text(
-                                    text = "${(volumeLevel * 100).toInt()}%",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = themeTextColor
+                                UniformTopBarButton(
+                                    icon = Icons.Default.Tv,
+                                    label = labelText,
+                                    onClick = {
+                                        activeAudioIndex = screenIdx
+                                        pickerTargetScreenIndex = screenIdx
+                                        recordUserInteraction()
+                                    },
+                                    isSelected = isTarget,
+                                    testTag = "target_screen_chip_${screenIdx + 1}",
+                                    themeGoldAccent = themeGoldAccent,
+                                    themeTextColor = themeTextColor,
+                                    isDark = isDark
                                 )
                             }
                         }
 
-                        // 5. Tombol Mode Multi Layar (1 Layar, 2 Layar, 4 Layar)
-                        Surface(
+                        // 3. Mode Multi Layar (1 Layar, 2 Layar, 4 Layar, 6 Layar)
+                        UniformTopBarButton(
+                            icon = when (currentMultiScreenMode) {
+                                MultiScreenMode.SINGLE -> Icons.Default.Tv
+                                MultiScreenMode.DUAL -> Icons.Default.Splitscreen
+                                MultiScreenMode.QUAD -> Icons.Default.GridView
+                                MultiScreenMode.HEXA -> Icons.Default.GridView
+                            },
+                            label = "Layar: ${currentMultiScreenMode.title}",
                             onClick = {
                                 recordUserInteraction()
                                 showMultiScreenDialog = true
                             },
-                            shape = RoundedCornerShape(10.dp),
-                            color = if (isDark) Color(0xFF1B1C28) else Color(0xFFF3F5FA),
-                            border = BorderStroke(1.dp, themeGoldAccent.copy(alpha = 0.75f)),
-                            modifier = Modifier.testTag("multi_screen_mode_button")
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 5.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = when (currentMultiScreenMode) {
-                                        MultiScreenMode.SINGLE -> Icons.Default.Tv
-                                        MultiScreenMode.DUAL -> Icons.Default.Splitscreen
-                                        MultiScreenMode.QUAD -> Icons.Default.GridView
-                                        MultiScreenMode.HEXA -> Icons.Default.GridView
-                                    },
-                                    contentDescription = "Mode Multi Layar",
-                                    tint = themeGoldAccent,
-                                    modifier = Modifier.size(15.dp)
-                                )
-                                Spacer(modifier = Modifier.width(3.dp))
-                                Text(
-                                    text = currentMultiScreenMode.title,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = themeTextColor
-                                )
-                            }
-                        }
+                            testTag = "multi_screen_mode_button",
+                            themeGoldAccent = themeGoldAccent,
+                            themeTextColor = themeTextColor,
+                            isDark = isDark
+                        )
 
-                        // 6. Tombol Resolusi / Rasio Layar Video (Fit, Zoom, Fill, Fixed Width, Fixed Height)
-                        Surface(
+                        // 4. Resolusi / Aspect Ratio
+                        UniformTopBarButton(
+                            icon = Icons.Default.AspectRatio,
+                            label = "Resolusi: ${currentAspectRatioMode.title}",
                             onClick = {
                                 recordUserInteraction()
                                 showAspectRatioDialog = true
                             },
-                            shape = RoundedCornerShape(10.dp),
-                            color = if (isDark) Color(0xFF1B1C28) else Color(0xFFF3F5FA),
-                            border = BorderStroke(1.dp, themeGoldAccent.copy(alpha = 0.75f)),
-                            modifier = Modifier.testTag("video_aspect_ratio_button")
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 5.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.AspectRatio,
-                                    contentDescription = "Resolusi Layar Video",
-                                    tint = themeGoldAccent,
-                                    modifier = Modifier.size(15.dp)
-                                )
-                                Spacer(modifier = Modifier.width(3.dp))
-                                Text(
-                                    text = currentAspectRatioMode.title,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = themeTextColor
-                                )
-                            }
-                        }
+                            testTag = "video_aspect_ratio_button",
+                            themeGoldAccent = themeGoldAccent,
+                            themeTextColor = themeTextColor,
+                            isDark = isDark
+                        )
 
-                        // 6. Reload Button
-                        IconButton(
+                        // 5. Audio / Volume
+                        UniformTopBarButton(
+                            icon = if (volumeLevel == 0f) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
+                            label = "Audio: ${(volumeLevel * 100).toInt()}%",
+                            onClick = {
+                                recordUserInteraction()
+                                showAudioVolumeDialog = true
+                            },
+                            testTag = "audio_volume_button",
+                            themeGoldAccent = themeGoldAccent,
+                            themeTextColor = themeTextColor,
+                            isDark = isDark
+                        )
+
+                        // 6. Orientasi Layar
+                        UniformTopBarButton(
+                            icon = when (currentOrientationMode) {
+                                AppOrientationMode.AUTO -> Icons.Default.ScreenRotation
+                                AppOrientationMode.PORTRAIT -> Icons.Default.StayCurrentPortrait
+                                AppOrientationMode.LANDSCAPE -> Icons.Default.StayCurrentLandscape
+                            },
+                            label = "Orientasi: ${currentOrientationMode.title}",
+                            onClick = {
+                                recordUserInteraction()
+                                showOrientationDialog = true
+                            },
+                            testTag = "orientation_selector_button",
+                            themeGoldAccent = themeGoldAccent,
+                            themeTextColor = themeTextColor,
+                            isDark = isDark
+                        )
+
+                        // 7. Urutan Channel
+                        UniformTopBarButton(
+                            icon = when (currentSortMode) {
+                                ChannelSortMode.ORIGINAL -> Icons.Default.FormatListNumbered
+                                ChannelSortMode.ASCENDING -> Icons.Default.ArrowUpward
+                                ChannelSortMode.DESCENDING -> Icons.Default.ArrowDownward
+                            },
+                            label = "Urutan: ${currentSortMode.title}",
+                            onClick = {
+                                recordUserInteraction()
+                                showSortDialog = true
+                            },
+                            testTag = "channel_sort_button",
+                            themeGoldAccent = themeGoldAccent,
+                            themeTextColor = themeTextColor,
+                            isDark = isDark
+                        )
+
+                        // 8. Playlist IPTV
+                        UniformTopBarButton(
+                            icon = Icons.Default.Settings,
+                            label = "Playlist IPTV",
+                            onClick = {
+                                recordUserInteraction()
+                                showPlaylistSettingsSheet = true
+                            },
+                            testTag = "playlist_settings_button",
+                            themeGoldAccent = themeGoldAccent,
+                            themeTextColor = themeTextColor,
+                            isDark = isDark
+                        )
+
+                        // 9. Refresh Playlist
+                        UniformTopBarButton(
+                            icon = Icons.Default.Refresh,
+                            label = if (isReloading) "Muat..." else "Refresh",
                             onClick = { reloadChannels() },
-                            enabled = !isReloading,
-                            modifier = Modifier
-                                .size(30.dp)
-                                .testTag("reload_channels_button")
-                        ) {
-                            if (isReloading) {
-                                CircularProgressIndicator(
-                                    color = themeGoldAccent,
-                                    strokeWidth = 2.dp,
-                                    modifier = Modifier.size(15.dp)
-                                )
-                            } else {
-                                Icon(
-                                    imageVector = Icons.Default.Refresh,
-                                    contentDescription = "Reload Playlist",
-                                    tint = themeGoldAccent,
-                                    modifier = Modifier.size(17.dp)
-                                )
-                            }
-                        }
+                            testTag = "reload_channels_button",
+                            themeGoldAccent = themeGoldAccent,
+                            themeTextColor = themeTextColor,
+                            isDark = isDark
+                        )
 
-                        // 5. Playlist Settings Button
-                        IconButton(
-                            onClick = { showPlaylistSettingsSheet = true },
-                            modifier = Modifier
-                                .size(30.dp)
-                                .testTag("playlist_settings_button")
+                        // 10. Tema Aplikasi
+                        UniformTopBarButton(
+                            icon = when (currentThemeMode) {
+                                AppThemeMode.LIGHT -> Icons.Default.LightMode
+                                AppThemeMode.DARK -> Icons.Default.DarkMode
+                                AppThemeMode.SYSTEM -> Icons.Default.BrightnessAuto
+                            },
+                            label = "Tema: ${currentThemeMode.title}",
+                            onClick = {
+                                recordUserInteraction()
+                                showThemeDialog = true
+                            },
+                            testTag = "theme_selector_button",
+                            themeGoldAccent = themeGoldAccent,
+                            themeTextColor = themeTextColor,
+                            isDark = isDark
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    // Bagian Kanan: Tombol Close (Tutup / Akhiri Menonton) dengan spesifikasi seragam
+                    Surface(
+                        onClick = {
+                            recordUserInteraction()
+                            onCloseToDashboard()
+                        },
+                        shape = RoundedCornerShape(10.dp),
+                        color = Color(0x3DFF3B30),
+                        border = BorderStroke(1.dp, Color(0xFFFF453A)),
+                        modifier = Modifier
+                            .height(34.dp)
+                            .testTag("live_tv_close_watching_button")
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Settings,
-                                contentDescription = "Setting Playlist",
-                                tint = themeTextSecondary,
-                                modifier = Modifier.size(16.dp)
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Tutup / Akhiri Menonton",
+                                tint = Color(0xFFFF5252),
+                                modifier = Modifier.size(15.dp)
                             )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(2.dp))
-
-                    // --- BAGIAN GENRE TABS & CHANNEL GRID (POP UP MELAYANG) ---
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(channelListHeight)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(themeChannelListBg)
-                            .padding(horizontal = 4.dp, vertical = 2.dp)
-                    ) {
-                        // Genre Scrollable Tabs
-                    ScrollableTabRow(
-                        selectedTabIndex = pagerState.currentPage.coerceIn(0, (genreList.size - 1).coerceAtLeast(0)),
-                        edgePadding = 0.dp,
-                        divider = {},
-                        containerColor = Color.Transparent,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(32.dp)
-                    ) {
-                        genreList.forEachIndexed { index, genreName ->
-                            val isSelected = pagerState.currentPage == index
-                            Tab(
-                                selected = isSelected,
-                                onClick = {
-                                    recordUserInteraction()
-                                    scope.launch {
-                                        pagerState.animateScrollToPage(index)
-                                    }
-                                },
-                                text = {
-                                    Text(
-                                        text = genreName,
-                                        fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Normal,
-                                        color = if (isSelected) themeGoldAccent else themeTextSecondary,
-                                        style = MaterialTheme.typography.labelSmall
-                                    )
-                                }
+                            Text(
+                                text = "Tutup",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
                             )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(2.dp))
-
-                    // Multi-Column Channel Grid with ~3-4 visible rows
-                    HorizontalPager(
-                        state = pagerState,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f)
-                    ) { page ->
-                        val currentGenreName = genreList.getOrNull(page) ?: "Semua Channel"
-                        val genreChannels = groupedGenres[currentGenreName] ?: emptyList()
-
-                        if (genreChannels.isEmpty()) {
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = if (currentGenreName == "⭐ Favorit") "Belum ada channel favorit.\nKetuk ikon ❤️ pada channel untuk menambahkannya!"
-                                           else "Tidak ada siaran dalam genre ini",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = Color.Gray,
-                                    textAlign = TextAlign.Center,
-                                    modifier = Modifier.padding(16.dp)
-                                )
-                            }
-                        } else {
-                            LazyVerticalGrid(
-                                columns = GridCells.Fixed(columnCount),
-                                contentPadding = PaddingValues(vertical = 2.dp),
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                verticalArrangement = Arrangement.spacedBy(4.dp),
-                                modifier = Modifier.fillMaxSize()
-                            ) {
-                                items(genreChannels, key = { it.id }) { ch ->
-                                    val isCurrentChannel = currentChannel?.id == ch.id
-                                    val isFav = favoriteChannelIds.contains(ch.id)
-
-                                    Card(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(50.dp)
-                                            .clip(RoundedCornerShape(9.dp))
-                                            .clickable {
-                                                val now = System.currentTimeMillis()
-                                                val isQuickDoubleTap = (lastClickedChannelId == ch.id) && (now - lastClickTimestamp < 650L)
-
-                                                if (isQuickDoubleTap) {
-                                                    // Ketuk 2x: Tampilkan Full Screen
-                                                    isFullScreen = true
-                                                    showControlsInFullScreen = false
-                                                } else {
-                                                    // Pilihan channel: Langsung putar channel live streaming & sembunyikan daftar pemilihan secara otomatis saat itu juga
-                                                    lastClickedChannelId = ch.id
-                                                    lastClickTimestamp = now
-
-                                                    if (currentMultiScreenMode == MultiScreenMode.SINGLE) {
-                                                        currentChannel = ch
-                                                        exoPlayer.volume = volumeLevel
-                                                        exoPlayer.play()
-                                                    } else {
-                                                        val targetIdx = activeAudioIndex.coerceIn(0, currentMultiScreenMode.count - 1)
-                                                        val updated = multiScreenChannels.toMutableList()
-                                                        while (updated.size <= targetIdx) {
-                                                            updated.add(null)
-                                                        }
-                                                        updated[targetIdx] = ch
-                                                        multiScreenChannels = updated
-                                                        if (targetIdx == 0) {
-                                                            currentChannel = ch
-                                                        }
-                                                        Toast.makeText(context, "Layar ${targetIdx + 1}: ${ch.name}", Toast.LENGTH_SHORT).show()
-                                                    }
-
-                                                    // Saat pengguna telah memilih channel, secara otomatis saat itu juga semua kontrol dan list sembunyi
-                                                    areControlsVisible = false
-                                                    showControlsInFullScreen = false
-                                                    onControlsVisibilityChange(false)
-                                                }
-                                            }
-                                            .testTag("channel_item_${ch.id}"),
-                                        colors = CardDefaults.cardColors(
-                                            containerColor = if (isCurrentChannel) themeCardSelectedBg else themeCardBg
-                                        ),
-                                        border = if (isCurrentChannel) BorderStroke(1.8.dp, themeGoldAccent)
-                                                 else BorderStroke(0.6.dp, if (isDark) Color(0xFF2E3040) else Color(0xFFD4D8E2))
-                                    ) {
-                                        Box(modifier = Modifier.fillMaxSize()) {
-                                            Column(
-                                                modifier = Modifier
-                                                    .fillMaxSize()
-                                                    .padding(horizontal = 3.dp, vertical = 2.dp),
-                                                horizontalAlignment = Alignment.CenterHorizontally,
-                                                verticalArrangement = Arrangement.Center
-                                            ) {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .size(28.dp)
-                                                        .clip(RoundedCornerShape(6.dp))
-                                                        .background(
-                                                            if (isCurrentChannel) themeGoldAccent.copy(alpha = 0.2f)
-                                                            else if (isDark) Color(0xFF252636) else Color(0xFFEEF0F6)
-                                                        ),
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    if (!ch.logoUrl.isNullOrEmpty()) {
-                                                        AsyncImage(
-                                                            model = ch.logoUrl,
-                                                            contentDescription = ch.name,
-                                                            contentScale = ContentScale.Fit,
-                                                            error = painterResource(id = R.drawable.img_app_icon_1784738562791),
-                                                            fallback = painterResource(id = R.drawable.img_app_icon_1784738562791),
-                                                            modifier = Modifier
-                                                                .size(26.dp)
-                                                                .clip(RoundedCornerShape(5.dp))
-                                                        )
-                                                    } else {
-                                                        Image(
-                                                            painter = painterResource(id = R.drawable.img_app_icon_1784738562791),
-                                                            contentDescription = ch.name,
-                                                            contentScale = ContentScale.Crop,
-                                                            modifier = Modifier
-                                                                .size(26.dp)
-                                                                .clip(RoundedCornerShape(5.dp))
-                                                        )
-                                                    }
-                                                }
-
-                                                Spacer(modifier = Modifier.height(1.dp))
-
-                                                Text(
-                                                    text = ch.name,
-                                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.5.sp),
-                                                    fontWeight = if (isCurrentChannel) FontWeight.ExtraBold else FontWeight.Medium,
-                                                    color = if (isCurrentChannel) themeGoldAccent else themeTextColor,
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis,
-                                                    textAlign = TextAlign.Center
-                                                )
-                                            }
-
-                                            if (ch.isMpd || ch.streamUrl.lowercase().contains(".mpd")) {
-                                                Surface(
-                                                    color = Color(0xDD332912),
-                                                    border = BorderStroke(0.5.dp, Color(0xFFFFD700)),
-                                                    shape = RoundedCornerShape(topStart = 8.dp, bottomEnd = 6.dp),
-                                                    modifier = Modifier.align(Alignment.TopStart)
-                                                ) {
-                                                    Text(
-                                                        text = "MPD",
-                                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 6.5.sp),
-                                                        fontWeight = FontWeight.ExtraBold,
-                                                        color = Color(0xFFFFD700),
-                                                        modifier = Modifier.padding(horizontal = 2.5.dp, vertical = 0.5.dp)
-                                                    )
-                                                }
-                                            }
-
-                                            IconButton(
-                                                onClick = {
-                                                    toggleFavoriteChannel(ch.id)
-                                                },
-                                                modifier = Modifier
-                                                    .size(20.dp)
-                                                    .align(Alignment.TopEnd)
-                                                    .testTag("fav_btn_${ch.id}")
-                                            ) {
-                                                Icon(
-                                                    imageVector = if (isFav) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                                                    contentDescription = "Favorit",
-                                                    tint = if (isFav) Color(0xFFFF4757) else themeTextSecondary.copy(alpha = 0.45f),
-                                                    modifier = Modifier.size(12.dp)
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            }
                         }
                     }
                 }
             }
         }
-    }
 
     // Floating Minimalist Luxury Controls Overlay in FULL SCREEN MODE (Toggle on tap)
     if (isFullScreen) {
@@ -3655,3 +3190,50 @@ private fun PlaylistSettingsBottomSheet(
         }
     }
 }
+
+@Composable
+private fun UniformTopBarButton(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    isSelected: Boolean = false,
+    testTag: String = "",
+    themeGoldAccent: Color,
+    themeTextColor: Color,
+    isDark: Boolean = true
+) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(10.dp),
+        color = if (isSelected) themeGoldAccent.copy(alpha = 0.28f) else (if (isDark) Color(0xFF1B1C28) else Color(0xFFF0F2F8)),
+        border = BorderStroke(
+            1.dp,
+            if (isSelected) themeGoldAccent else themeGoldAccent.copy(alpha = 0.45f)
+        ),
+        modifier = Modifier
+            .height(34.dp)
+            .testTag(testTag)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = label,
+                tint = if (isSelected) themeGoldAccent else themeGoldAccent.copy(alpha = 0.95f),
+                modifier = Modifier.size(15.dp)
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (isSelected) themeGoldAccent else themeTextColor,
+                maxLines = 1
+            )
+        }
+    }
+}
+
