@@ -1,8 +1,12 @@
+@file:OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+
 package com.example.ui
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.data.IptvChannel
+import com.example.data.IptvRepository
 import com.example.data.ReaderFont
 import com.example.data.ReaderPreferences
 import com.example.data.ReaderTheme
@@ -20,6 +24,7 @@ import kotlinx.coroutines.launch
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository = StoryRepository.getInstance(application)
+    val iptvRepository: IptvRepository = IptvRepository.getInstance(application)
 
     // Onboarding / Welcome modal state
     private val _showWelcomeBanner = MutableStateFlow(true)
@@ -33,7 +38,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _isAdminLoggedIn = MutableStateFlow(false)
     val isAdminLoggedIn: StateFlow<Boolean> = _isAdminLoggedIn.asStateFlow()
 
-    // Sync state
+    // Sync state for stories
     private val _syncState = MutableStateFlow<SyncState>(SyncState.Idle)
     val syncState: StateFlow<SyncState> = _syncState.asStateFlow()
 
@@ -74,11 +79,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             initialValue = emptyList()
         )
 
+    val liveTvChannels: StateFlow<List<IptvChannel>> = iptvRepository.channelsFlow
+    val isLiveTvUpdating: StateFlow<Boolean> = iptvRepository.isUpdatingFlow
+
     init {
+        // Otomatis memperbarui semua sumber link yang tertera saat aplikasi dibuat (stories & Live TV)
         viewModelScope.launch {
             repository.checkAndPreloadInitialData()
-            // Try auto-syncing from web
             syncStories(fetchAll = true)
+        }
+        viewModelScope.launch {
+            iptvRepository.autoUpdateAllSources(application)
         }
     }
 
@@ -143,6 +154,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 fetchAll = fetchAll
             )
             _syncState.value = result
+        }
+    }
+
+    fun refreshLiveTvSources() {
+        viewModelScope.launch {
+            iptvRepository.autoUpdateAllSources(getApplication())
         }
     }
 

@@ -42,7 +42,12 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 
 @Composable
 fun MultiScreenModeDialog(
@@ -58,79 +63,100 @@ fun MultiScreenModeDialog(
     val textColor = if (isDark) Color.White else Color(0xFF181920)
     val textSecondary = if (isDark) Color.LightGray else Color(0xFF555866)
 
-    Dialog(onDismissRequest = onDismiss) {
-        Surface(
-            shape = RoundedCornerShape(20.dp),
-            color = bgColor,
-            border = BorderStroke(
-                1.5.dp,
-                Brush.horizontalGradient(listOf(goldSoft, goldAccent, goldSoft))
-            ),
-            tonalElevation = 10.dp,
-            shadowElevation = 16.dp,
-            modifier = Modifier
-                .fillMaxWidth(0.95f)
-                .testTag("multi_screen_mode_dialog")
+    val configuration = LocalConfiguration.current
+    val screenWidthDp = configuration.screenWidthDp
+    val screenHeightDp = configuration.screenHeightDp
+    val dialogWidth = (screenWidthDp * 0.75f).dp
+    val dialogHeight = (screenHeightDp * 0.75f).dp
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
         ) {
-            Column(
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = bgColor,
+                border = BorderStroke(
+                    1.5.dp,
+                    Brush.horizontalGradient(listOf(goldSoft, goldAccent, goldSoft))
+                ),
+                tonalElevation = 10.dp,
+                shadowElevation = 16.dp,
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(20.dp)
+                    .width(dialogWidth)
+                    .height(dialogHeight)
+                    .testTag("multi_screen_mode_dialog")
             ) {
-                // Header
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp)
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Surface(
-                            shape = CircleShape,
-                            color = goldAccent.copy(alpha = 0.18f),
-                            border = BorderStroke(1.dp, goldAccent),
-                            modifier = Modifier.size(38.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Icons.Default.GridView,
-                                    contentDescription = null,
-                                    tint = goldAccent,
-                                    modifier = Modifier.size(20.dp)
+                    // Header
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Surface(
+                                shape = CircleShape,
+                                color = goldAccent.copy(alpha = 0.18f),
+                                border = BorderStroke(1.dp, goldAccent),
+                                modifier = Modifier.size(38.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.GridView,
+                                        contentDescription = null,
+                                        tint = goldAccent,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    text = "Mode Multi Layar",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = goldAccent
+                                )
+                                Text(
+                                    text = "Pilih tata letak multi layar siaran",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = textSecondary
                                 )
                             }
                         }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
-                            Text(
-                                text = "Mode Multi Layar",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = goldAccent
-                            )
-                            Text(
-                                text = "Pilih tata letak multi layar siaran",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = textSecondary
+
+                        IconButton(
+                            onClick = onDismiss,
+                            modifier = Modifier.testTag("close_multi_screen_dialog_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Tutup",
+                                tint = textSecondary
                             )
                         }
                     }
 
-                    IconButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.testTag("close_multi_screen_dialog_button")
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Options list (Scrollable)
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Tutup",
-                            tint = textSecondary
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Options list
-                MultiScreenMode.values().forEach { mode ->
+                        MultiScreenMode.values().forEach { mode ->
                     val isSelected = currentMode == mode
                     Card(
                         shape = RoundedCornerShape(14.dp),
@@ -260,41 +286,52 @@ fun MultiScreenModeDialog(
                                     MultiScreenMode.HEXA -> {
                                         Column(
                                             modifier = Modifier.fillMaxWidth(),
-                                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                                            verticalArrangement = Arrangement.spacedBy(1.5.dp)
                                         ) {
-                                            Row(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .weight(1f),
-                                                horizontalArrangement = Arrangement.spacedBy(2.dp)
-                                            ) {
-                                                listOf("1", "2", "3").forEach { label ->
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .weight(1f)
-                                                            .fillMaxHeight()
-                                                            .background(goldAccent.copy(alpha = 0.85f), RoundedCornerShape(2.dp)),
-                                                        contentAlignment = Alignment.Center
-                                                    ) {
-                                                        Text(label, fontSize = 7.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+                                            listOf(listOf("1", "2"), listOf("3", "4"), listOf("5", "6")).forEach { rowLabels ->
+                                                Row(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .weight(1f),
+                                                    horizontalArrangement = Arrangement.spacedBy(1.5.dp)
+                                                ) {
+                                                    rowLabels.forEach { label ->
+                                                        Box(
+                                                            modifier = Modifier
+                                                                .weight(1f)
+                                                                .fillMaxHeight()
+                                                                .background(goldAccent.copy(alpha = 0.75f), RoundedCornerShape(1.5.dp)),
+                                                            contentAlignment = Alignment.Center
+                                                        ) {
+                                                            Text(label, fontSize = 7.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+                                                        }
                                                     }
                                                 }
                                             }
-                                            Row(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .weight(1f),
-                                                horizontalArrangement = Arrangement.spacedBy(2.dp)
-                                            ) {
-                                                listOf("4", "5", "6").forEach { label ->
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .weight(1f)
-                                                            .fillMaxHeight()
-                                                            .background(goldAccent.copy(alpha = 0.65f), RoundedCornerShape(2.dp)),
-                                                        contentAlignment = Alignment.Center
-                                                    ) {
-                                                        Text(label, fontSize = 7.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+                                        }
+                                    }
+                                    MultiScreenMode.OCTA -> {
+                                        Column(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalArrangement = Arrangement.spacedBy(1.dp)
+                                        ) {
+                                            listOf(listOf("1", "2"), listOf("3", "4"), listOf("5", "6"), listOf("7", "8")).forEach { rowLabels ->
+                                                Row(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .weight(1f),
+                                                    horizontalArrangement = Arrangement.spacedBy(1.dp)
+                                                ) {
+                                                    rowLabels.forEach { label ->
+                                                        Box(
+                                                            modifier = Modifier
+                                                                .weight(1f)
+                                                                .fillMaxHeight()
+                                                                .background(goldAccent.copy(alpha = 0.75f), RoundedCornerShape(1.dp)),
+                                                            contentAlignment = Alignment.Center
+                                                        ) {
+                                                            Text(label, fontSize = 6.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+                                                        }
                                                     }
                                                 }
                                             }
@@ -336,4 +373,6 @@ fun MultiScreenModeDialog(
             }
         }
     }
+}
+}
 }

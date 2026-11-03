@@ -30,6 +30,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -88,9 +89,9 @@ import androidx.compose.material.icons.filled.StayCurrentLandscape
 import androidx.compose.material.icons.filled.StayCurrentPortrait
 import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material.icons.filled.UploadFile
-import androidx.compose.material.icons.filled.VolumeMute
-import androidx.compose.material.icons.filled.VolumeOff
-import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.automirrored.filled.VolumeMute
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -213,11 +214,12 @@ fun LiveStreamingScreen(
             window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
     }
-    val iptvRepository = remember { IptvRepository() }
+    val iptvRepository = remember { IptvRepository.getInstance(context) }
+    val initialChannels = remember { iptvRepository.getCachedChannels(context) }
 
-    var channels by remember { mutableStateOf<List<IptvChannel>>(emptyList()) }
-    var favoriteChannelIds by remember { mutableStateOf<Set<String>>(emptySet()) }
-    var isLoadingChannels by remember { mutableStateOf(true) }
+    var channels by remember { mutableStateOf<List<IptvChannel>>(initialChannels) }
+    var favoriteChannelIds by remember { mutableStateOf<Set<String>>(iptvRepository.getFavoriteChannelIds(context)) }
+    var isLoadingChannels by remember { mutableStateOf(initialChannels.isEmpty()) }
 
     val toggleFavoriteChannel: (String) -> Unit = { channelId ->
         iptvRepository.toggleFavoriteChannel(context, channelId)
@@ -225,7 +227,7 @@ fun LiveStreamingScreen(
     }
 
     // Single Player & Full Screen state
-    var currentChannel by remember { mutableStateOf<IptvChannel?>(null) }
+    var currentChannel by remember { mutableStateOf<IptvChannel?>(initialChannels.firstOrNull()) }
     var isBuffering by remember { mutableStateOf(false) }
     var isPlaying by remember { mutableStateOf(false) }
     var streamError by remember { mutableStateOf<String?>(null) }
@@ -239,8 +241,10 @@ fun LiveStreamingScreen(
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.screenWidthDp > configuration.screenHeightDp
     val channelListHeight = if (isLandscape) 130.dp else 170.dp
-    // Jumlah kolom channel dibuat 5 (landscape) & 3 (portrait) agar proporsional dalam pop-up 3/4 layar
     val columnCount = if (isLandscape) 5 else 3
+    // Ukuran kotak pop up sekitar 75% dari ukuran asli perangkat device
+    val dialogWidth75 = (configuration.screenWidthDp * 0.75f).dp
+    val dialogHeight75 = (configuration.screenHeightDp * 0.75f).dp
 
     var showPlaylistSettingsSheet by remember { mutableStateOf(false) }
     var showAudioVolumeDialog by remember { mutableStateOf(false) }
@@ -251,7 +255,7 @@ fun LiveStreamingScreen(
     var showAspectRatioDialog by remember { mutableStateOf(false) }
     var currentAspectRatioMode by remember { mutableStateOf(VideoAspectRatioMode.FIT) }
     var currentMultiScreenMode by remember { mutableStateOf(MultiScreenMode.SINGLE) }
-    var multiScreenChannels by remember { mutableStateOf<List<IptvChannel?>>(listOf(null, null, null, null, null, null)) }
+    var multiScreenChannels by remember { mutableStateOf<List<IptvChannel?>>(List(8) { null }) }
     var activeAudioIndex by remember { mutableStateOf(0) }
     var pickerTargetScreenIndex by remember { mutableStateOf<Int?>(null) }
     var currentSortMode by remember { mutableStateOf(iptvRepository.getSavedSortMode(context)) }
@@ -449,18 +453,30 @@ fun LiveStreamingScreen(
         }
     }
 
-    // Initial channel load
+    // Observe background repository channel updates
     LaunchedEffect(Unit) {
-        isLoadingChannels = true
-        favoriteChannelIds = iptvRepository.getFavoriteChannelIds(context)
-        val list = iptvRepository.fetchChannels(context)
-        channels = list
-        if (list.isNotEmpty()) {
-            currentChannel = list.firstOrNull()
-            // Multi-screen mode mewajibkan pengguna memilih channel masing-masing layar secara mandiri
-            multiScreenChannels = listOf(null, null, null, null, null, null)
+        iptvRepository.channelsFlow.collect { updatedList ->
+            if (updatedList.isNotEmpty()) {
+                channels = updatedList
+                if (currentChannel == null) {
+                    currentChannel = updatedList.firstOrNull()
+                }
+                isLoadingChannels = false
+            }
         }
-        isLoadingChannels = false
+    }
+
+    // Initial check to guarantee non-empty channels
+    LaunchedEffect(Unit) {
+        if (channels.isEmpty()) {
+            isLoadingChannels = true
+            val list = iptvRepository.getCachedChannels(context)
+            channels = list
+            if (currentChannel == null && list.isNotEmpty()) {
+                currentChannel = list.firstOrNull()
+            }
+            isLoadingChannels = false
+        }
     }
 
     // Load stream when currentChannel changes
@@ -650,21 +666,372 @@ fun LiveStreamingScreen(
         }
     }
 
+    val topWatchingBarContent: @Composable () -> Unit = {
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = Color(0xEE10111A),
+            border = BorderStroke(
+                1.2.dp,
+                Brush.horizontalGradient(
+                    listOf(
+                        themeGoldSoft,
+                        themeGoldAccent.copy(alpha = 0.7f),
+                        themeGoldSoft
+                    )
+                )
+            ),
+            shadowElevation = 10.dp,
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("live_tv_top_watching_bar")
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                // Bagian Kiri: Judul Nama Aplikasi "Ruang Cerita" + LIVE badge
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clickable {
+                            recordUserInteraction()
+                            pickerTargetScreenIndex = activeAudioIndex.coerceIn(0, currentMultiScreenMode.count - 1)
+                        }
+                        .testTag("top_bar_app_title_section")
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = themeGoldAccent.copy(alpha = 0.18f),
+                        border = BorderStroke(1.dp, themeGoldAccent),
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.LiveTv,
+                                contentDescription = null,
+                                tint = themeGoldAccent,
+                                modifier = Modifier.size(17.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "Ruang Cerita",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color.White
+                            )
+                            Spacer(modifier = Modifier.width(5.dp))
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = Color(0xFFE50914),
+                                modifier = Modifier.padding(horizontal = 2.dp)
+                            ) {
+                                Text(
+                                    text = "LIVE",
+                                    color = Color.White,
+                                    fontSize = 8.5.sp,
+                                    fontWeight = FontWeight.Black,
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                )
+                            }
+                        }
+                        Text(
+                            text = "Live TV • ${currentMultiScreenMode.title}",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontSize = 9.5.sp,
+                            color = themeGoldAccent.copy(alpha = 0.9f)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                // Bagian Tengah: Satu Baris Kontrol Lengkap (Scrollable Row dengan Ukuran Box & Tulisan Seragam)
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .horizontalScroll(rememberScrollState())
+                        .padding(horizontal = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    // 1. Tombol Pemilihan Channel
+                    UniformTopBarButton(
+                        icon = Icons.Default.Tv,
+                        contentDescription = "Pilihan Siaran / Channel",
+                        onClick = {
+                            recordUserInteraction()
+                            pickerTargetScreenIndex = activeAudioIndex.coerceIn(0, currentMultiScreenMode.count - 1)
+                        },
+                        isSelected = true,
+                        testTag = "floating_open_channel_controls_button",
+                        themeGoldAccent = themeGoldAccent,
+                        themeTextColor = themeTextColor,
+                        isDark = isDark
+                    )
+
+
+                    // 3. Mode Multi Layar (1 Layar, 2 Layar, 4 Layar, 6 Layar, 8 Layar)
+                    UniformTopBarButton(
+                        icon = when (currentMultiScreenMode) {
+                            MultiScreenMode.SINGLE -> Icons.Default.Tv
+                            MultiScreenMode.DUAL -> Icons.Default.Splitscreen
+                            MultiScreenMode.QUAD -> Icons.Default.GridView
+                            MultiScreenMode.HEXA -> Icons.Default.GridView
+                            MultiScreenMode.OCTA -> Icons.Default.GridView
+                        },
+                        contentDescription = "Mode Layar (${currentMultiScreenMode.title})",
+                        onClick = {
+                            recordUserInteraction()
+                            showMultiScreenDialog = true
+                        },
+                        testTag = "multi_screen_mode_button",
+                        themeGoldAccent = themeGoldAccent,
+                        themeTextColor = themeTextColor,
+                        isDark = isDark
+                    )
+
+                    // 4. Resolusi / Aspect Ratio
+                    UniformTopBarButton(
+                        icon = Icons.Default.AspectRatio,
+                        contentDescription = "Resolusi / Aspect Ratio (${currentAspectRatioMode.title})",
+                        onClick = {
+                            recordUserInteraction()
+                            showAspectRatioDialog = true
+                        },
+                        testTag = "video_aspect_ratio_button",
+                        themeGoldAccent = themeGoldAccent,
+                        themeTextColor = themeTextColor,
+                        isDark = isDark
+                    )
+
+                    // 5. Audio / Volume
+                    UniformTopBarButton(
+                        icon = if (volumeLevel == 0f) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
+                        contentDescription = "Pengaturan Volume Audio (${(volumeLevel * 100).toInt()}%)",
+                        onClick = {
+                            recordUserInteraction()
+                            showAudioVolumeDialog = true
+                        },
+                        testTag = "audio_volume_button",
+                        themeGoldAccent = themeGoldAccent,
+                        themeTextColor = themeTextColor,
+                        isDark = isDark
+                    )
+
+                    // 6. Orientasi Layar
+                    UniformTopBarButton(
+                        icon = when (currentOrientationMode) {
+                            AppOrientationMode.AUTO -> Icons.Default.ScreenRotation
+                            AppOrientationMode.PORTRAIT -> Icons.Default.StayCurrentPortrait
+                            AppOrientationMode.LANDSCAPE -> Icons.Default.StayCurrentLandscape
+                        },
+                        contentDescription = "Orientasi Layar (${currentOrientationMode.title})",
+                        onClick = {
+                            recordUserInteraction()
+                            showOrientationDialog = true
+                        },
+                        testTag = "orientation_selector_button",
+                        themeGoldAccent = themeGoldAccent,
+                        themeTextColor = themeTextColor,
+                        isDark = isDark
+                    )
+
+                    // 7. Urutan Channel
+                    UniformTopBarButton(
+                        icon = when (currentSortMode) {
+                            ChannelSortMode.ORIGINAL -> Icons.Default.FormatListNumbered
+                            ChannelSortMode.ASCENDING -> Icons.Default.ArrowUpward
+                            ChannelSortMode.DESCENDING -> Icons.Default.ArrowDownward
+                        },
+                        contentDescription = "Urutan Channel (${currentSortMode.title})",
+                        onClick = {
+                            recordUserInteraction()
+                            showSortDialog = true
+                        },
+                        testTag = "channel_sort_button",
+                        themeGoldAccent = themeGoldAccent,
+                        themeTextColor = themeTextColor,
+                        isDark = isDark
+                    )
+
+                    // 8. Playlist IPTV
+                    UniformTopBarButton(
+                        icon = Icons.Default.Settings,
+                        contentDescription = "Pengaturan Playlist IPTV",
+                        onClick = {
+                            recordUserInteraction()
+                            showPlaylistSettingsSheet = true
+                        },
+                        testTag = "playlist_settings_button",
+                        themeGoldAccent = themeGoldAccent,
+                        themeTextColor = themeTextColor,
+                        isDark = isDark
+                    )
+
+                    // 9. Refresh Playlist
+                    UniformTopBarButton(
+                        icon = Icons.Default.Refresh,
+                        contentDescription = if (isReloading) "Memuat..." else "Refresh Playlist",
+                        onClick = { reloadChannels() },
+                        testTag = "reload_channels_button",
+                        themeGoldAccent = themeGoldAccent,
+                        themeTextColor = themeTextColor,
+                        isDark = isDark
+                    )
+
+                    // 10. Tema Aplikasi
+                    UniformTopBarButton(
+                        icon = when (currentThemeMode) {
+                            AppThemeMode.LIGHT -> Icons.Default.LightMode
+                            AppThemeMode.DARK -> Icons.Default.DarkMode
+                            AppThemeMode.SYSTEM -> Icons.Default.BrightnessAuto
+                        },
+                        contentDescription = "Tema Tampilan (${currentThemeMode.title})",
+                        onClick = {
+                            recordUserInteraction()
+                            showThemeDialog = true
+                        },
+                        testTag = "theme_selector_button",
+                        themeGoldAccent = themeGoldAccent,
+                        themeTextColor = themeTextColor,
+                        isDark = isDark
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                // Bagian Kanan: Tombol Close (Tutup / Akhiri Menonton) seragam 34x34dp
+                Surface(
+                    onClick = {
+                        recordUserInteraction()
+                        onCloseToDashboard()
+                    },
+                    shape = RoundedCornerShape(10.dp),
+                    color = Color(0x3DFF3B30),
+                    border = BorderStroke(1.dp, Color(0xFFFF453A)),
+                    modifier = Modifier
+                        .size(34.dp)
+                        .testTag("live_tv_close_watching_button")
+                ) {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Tutup / Akhiri Menonton",
+                            tint = Color(0xFFFF5252),
+                            modifier = Modifier.size(17.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(themeBgColor)
             .testTag("live_streaming_screen")
     ) {
-        // --- BAGIAN VIDEO STREAMING UTAMA (SELALU FULL LAYAR PENUH 100%) ---
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black),
-            contentAlignment = Alignment.Center
-        ) {
-            if (currentMultiScreenMode == MultiScreenMode.SINGLE) {
-                // Single Video Player View
+        if (currentMultiScreenMode != MultiScreenMode.SINGLE) {
+            // MODE MULTI LAYAR (2, 4, 6, 8 LAYAR):
+            // Judul dan kontrol dibuat FIX TETAP MUNCUL di bagian atas,
+            // dan bagian live multi layar ditempatkan tepat di bawah kontrol.
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(start = 10.dp, top = 6.dp, end = 10.dp, bottom = 4.dp)
+                ) {
+                    topWatchingBarContent()
+                }
+
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .background(Color.Black)
+                ) {
+                    MultiScreenPlayerLayout(
+                        mode = currentMultiScreenMode,
+                        screenChannels = multiScreenChannels,
+                        activeAudioIndex = activeAudioIndex,
+                        volumeLevel = volumeLevel,
+                        onSelectAudioIndex = { index ->
+                            activeAudioIndex = index
+                            recordUserInteraction()
+                            Toast.makeText(context, "🔊 Audio Aktif: Layar ${index + 1}", Toast.LENGTH_SHORT).show()
+                        },
+                        onRequestChannelPicker = { index ->
+                            pickerTargetScreenIndex = index
+                            recordUserInteraction()
+                        },
+                        onPreviousChannel = { index ->
+                            goToPreviousChannelForScreen(index)
+                        },
+                        onNextChannel = { index ->
+                            goToNextChannelForScreen(index)
+                        },
+                        onToggleControls = {
+                            // Kontrol bar sudah fix di atas pada mode multi-layar
+                        },
+                        aspectRatioMode = currentAspectRatioMode,
+                        modifier = Modifier.fillMaxSize()
+                    )
+
+                    // Global Buffering indicator during channel repository fetch
+                    if (isLoadingChannels) {
+                        Surface(
+                            color = Color.Black.copy(alpha = 0.85f),
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier
+                                .align(Alignment.Center)
+                                .padding(16.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                CircularProgressIndicator(
+                                    color = Color(0xFFFFD700),
+                                    strokeWidth = 3.dp,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text(
+                                    text = "Mengambil siaran IPTV...",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            // MODE 1 LAYAR (SINGLE):
+            // Video Streaming Utama Full Layar Penuh dengan Overlay Kontrol
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black),
+                contentAlignment = Alignment.Center
+            ) {
                 SingleLivePlayerView(
                     channel = currentChannel,
                     player = exoPlayer,
@@ -702,372 +1069,46 @@ fun LiveStreamingScreen(
                     aspectRatioMode = currentAspectRatioMode,
                     modifier = Modifier.fillMaxSize()
                 )
-            } else {
-                // Multi Screen Player View (2 Layar: Atas & Bawah, atau 4 Layar: Grid 2x2)
-                MultiScreenPlayerLayout(
-                    mode = currentMultiScreenMode,
-                    screenChannels = multiScreenChannels,
-                    activeAudioIndex = activeAudioIndex,
-                    volumeLevel = volumeLevel,
-                    onSelectAudioIndex = { index ->
-                        activeAudioIndex = index
-                        recordUserInteraction()
-                        Toast.makeText(context, "🔊 Audio Aktif: Layar ${index + 1}", Toast.LENGTH_SHORT).show()
-                    },
-                    onRequestChannelPicker = { index ->
-                        pickerTargetScreenIndex = index
-                        recordUserInteraction()
-                    },
-                    onPreviousChannel = { index ->
-                        goToPreviousChannelForScreen(index)
-                    },
-                    onNextChannel = { index ->
-                        goToNextChannelForScreen(index)
-                    },
-                    onToggleControls = {
-                        toggleControlsVisibility()
-                    },
-                    aspectRatioMode = currentAspectRatioMode,
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
 
-            // Global Buffering indicator during channel repository fetch
-            if (isLoadingChannels) {
-                Surface(
-                    color = Color.Black.copy(alpha = 0.85f),
-                    shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier.padding(16.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        CircularProgressIndicator(
-                            color = Color(0xFFFFD700),
-                            strokeWidth = 3.dp,
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(
-                            text = "Mengambil siaran IPTV...",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                    }
-                }
-            }
-        }
-
-        // --- ATAS BAGIAN JUDUL APLIKASI, SEMUA KONTROL LENGKAP DALAM 1 BARIS SERAGAM, DAN TOMBOL CLOSE ---
-        AnimatedVisibility(
-            visible = if (isFullScreen) showControlsInFullScreen else areControlsVisible,
-            enter = fadeIn() + slideInVertically(initialOffsetY = { -it }),
-            exit = fadeOut() + slideOutVertically(targetOffsetY = { -it }),
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .fillMaxWidth()
-                .statusBarsPadding()
-                .padding(start = 10.dp, top = 6.dp, end = 10.dp)
-        ) {
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = Color(0xEE10111A),
-                border = BorderStroke(
-                    1.2.dp,
-                    Brush.horizontalGradient(
-                        listOf(
-                            themeGoldSoft,
-                            themeGoldAccent.copy(alpha = 0.7f),
-                            themeGoldSoft
-                        )
-                    )
-                ),
-                shadowElevation = 10.dp,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("live_tv_top_watching_bar")
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 10.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    // Bagian Kiri: Judul Nama Aplikasi "Ruang Cerita" + LIVE badge
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .clickable {
-                                recordUserInteraction()
-                                pickerTargetScreenIndex = activeAudioIndex.coerceIn(0, currentMultiScreenMode.count - 1)
-                            }
-                            .testTag("top_bar_app_title_section")
-                    ) {
-                        Surface(
-                            shape = CircleShape,
-                            color = themeGoldAccent.copy(alpha = 0.18f),
-                            border = BorderStroke(1.dp, themeGoldAccent),
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Icons.Default.LiveTv,
-                                    contentDescription = null,
-                                    tint = themeGoldAccent,
-                                    modifier = Modifier.size(17.dp)
-                                )
-                            }
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Column {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = "Ruang Cerita",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = Color.White
-                                )
-                                Spacer(modifier = Modifier.width(5.dp))
-                                Surface(
-                                    shape = RoundedCornerShape(4.dp),
-                                    color = Color(0xFFE50914),
-                                    modifier = Modifier.padding(horizontal = 2.dp)
-                                ) {
-                                    Text(
-                                        text = "LIVE",
-                                        color = Color.White,
-                                        fontSize = 8.5.sp,
-                                        fontWeight = FontWeight.Black,
-                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
-                                    )
-                                }
-                            }
-                            Text(
-                                text = "Live TV • ${currentMultiScreenMode.title}",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontSize = 9.5.sp,
-                                color = themeGoldAccent.copy(alpha = 0.9f)
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    // Bagian Tengah: Satu Baris Kontrol Lengkap (Scrollable Row dengan Ukuran Box & Tulisan Seragam)
-                    Row(
-                        modifier = Modifier
-                            .weight(1f)
-                            .horizontalScroll(rememberScrollState())
-                            .padding(horizontal = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        // 1. Tombol Pemilihan Channel
-                        UniformTopBarButton(
-                            icon = Icons.Default.Tv,
-                            label = "Pilihan Channel",
-                            onClick = {
-                                recordUserInteraction()
-                                pickerTargetScreenIndex = activeAudioIndex.coerceIn(0, currentMultiScreenMode.count - 1)
-                            },
-                            isSelected = true,
-                            testTag = "floating_open_channel_controls_button",
-                            themeGoldAccent = themeGoldAccent,
-                            themeTextColor = themeTextColor,
-                            isDark = isDark
-                        )
-
-                        // 2. Chip Target Layar (Khusus saat Mode Multi Layar)
-                        if (currentMultiScreenMode != MultiScreenMode.SINGLE) {
-                            (0 until currentMultiScreenMode.count).forEach { screenIdx ->
-                                val isTarget = (activeAudioIndex == screenIdx)
-                                val ch = multiScreenChannels.getOrNull(screenIdx)
-                                val hasChannel = ch != null
-                                val labelText = "Layar ${screenIdx + 1}${if (hasChannel) " (${ch?.name?.take(6)})" else ""}"
-
-                                UniformTopBarButton(
-                                    icon = Icons.Default.Tv,
-                                    label = labelText,
-                                    onClick = {
-                                        activeAudioIndex = screenIdx
-                                        pickerTargetScreenIndex = screenIdx
-                                        recordUserInteraction()
-                                    },
-                                    isSelected = isTarget,
-                                    testTag = "target_screen_chip_${screenIdx + 1}",
-                                    themeGoldAccent = themeGoldAccent,
-                                    themeTextColor = themeTextColor,
-                                    isDark = isDark
-                                )
-                            }
-                        }
-
-                        // 3. Mode Multi Layar (1 Layar, 2 Layar, 4 Layar, 6 Layar)
-                        UniformTopBarButton(
-                            icon = when (currentMultiScreenMode) {
-                                MultiScreenMode.SINGLE -> Icons.Default.Tv
-                                MultiScreenMode.DUAL -> Icons.Default.Splitscreen
-                                MultiScreenMode.QUAD -> Icons.Default.GridView
-                                MultiScreenMode.HEXA -> Icons.Default.GridView
-                            },
-                            label = "Layar: ${currentMultiScreenMode.title}",
-                            onClick = {
-                                recordUserInteraction()
-                                showMultiScreenDialog = true
-                            },
-                            testTag = "multi_screen_mode_button",
-                            themeGoldAccent = themeGoldAccent,
-                            themeTextColor = themeTextColor,
-                            isDark = isDark
-                        )
-
-                        // 4. Resolusi / Aspect Ratio
-                        UniformTopBarButton(
-                            icon = Icons.Default.AspectRatio,
-                            label = "Resolusi: ${currentAspectRatioMode.title}",
-                            onClick = {
-                                recordUserInteraction()
-                                showAspectRatioDialog = true
-                            },
-                            testTag = "video_aspect_ratio_button",
-                            themeGoldAccent = themeGoldAccent,
-                            themeTextColor = themeTextColor,
-                            isDark = isDark
-                        )
-
-                        // 5. Audio / Volume
-                        UniformTopBarButton(
-                            icon = if (volumeLevel == 0f) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
-                            label = "Audio: ${(volumeLevel * 100).toInt()}%",
-                            onClick = {
-                                recordUserInteraction()
-                                showAudioVolumeDialog = true
-                            },
-                            testTag = "audio_volume_button",
-                            themeGoldAccent = themeGoldAccent,
-                            themeTextColor = themeTextColor,
-                            isDark = isDark
-                        )
-
-                        // 6. Orientasi Layar
-                        UniformTopBarButton(
-                            icon = when (currentOrientationMode) {
-                                AppOrientationMode.AUTO -> Icons.Default.ScreenRotation
-                                AppOrientationMode.PORTRAIT -> Icons.Default.StayCurrentPortrait
-                                AppOrientationMode.LANDSCAPE -> Icons.Default.StayCurrentLandscape
-                            },
-                            label = "Orientasi: ${currentOrientationMode.title}",
-                            onClick = {
-                                recordUserInteraction()
-                                showOrientationDialog = true
-                            },
-                            testTag = "orientation_selector_button",
-                            themeGoldAccent = themeGoldAccent,
-                            themeTextColor = themeTextColor,
-                            isDark = isDark
-                        )
-
-                        // 7. Urutan Channel
-                        UniformTopBarButton(
-                            icon = when (currentSortMode) {
-                                ChannelSortMode.ORIGINAL -> Icons.Default.FormatListNumbered
-                                ChannelSortMode.ASCENDING -> Icons.Default.ArrowUpward
-                                ChannelSortMode.DESCENDING -> Icons.Default.ArrowDownward
-                            },
-                            label = "Urutan: ${currentSortMode.title}",
-                            onClick = {
-                                recordUserInteraction()
-                                showSortDialog = true
-                            },
-                            testTag = "channel_sort_button",
-                            themeGoldAccent = themeGoldAccent,
-                            themeTextColor = themeTextColor,
-                            isDark = isDark
-                        )
-
-                        // 8. Playlist IPTV
-                        UniformTopBarButton(
-                            icon = Icons.Default.Settings,
-                            label = "Playlist IPTV",
-                            onClick = {
-                                recordUserInteraction()
-                                showPlaylistSettingsSheet = true
-                            },
-                            testTag = "playlist_settings_button",
-                            themeGoldAccent = themeGoldAccent,
-                            themeTextColor = themeTextColor,
-                            isDark = isDark
-                        )
-
-                        // 9. Refresh Playlist
-                        UniformTopBarButton(
-                            icon = Icons.Default.Refresh,
-                            label = if (isReloading) "Muat..." else "Refresh",
-                            onClick = { reloadChannels() },
-                            testTag = "reload_channels_button",
-                            themeGoldAccent = themeGoldAccent,
-                            themeTextColor = themeTextColor,
-                            isDark = isDark
-                        )
-
-                        // 10. Tema Aplikasi
-                        UniformTopBarButton(
-                            icon = when (currentThemeMode) {
-                                AppThemeMode.LIGHT -> Icons.Default.LightMode
-                                AppThemeMode.DARK -> Icons.Default.DarkMode
-                                AppThemeMode.SYSTEM -> Icons.Default.BrightnessAuto
-                            },
-                            label = "Tema: ${currentThemeMode.title}",
-                            onClick = {
-                                recordUserInteraction()
-                                showThemeDialog = true
-                            },
-                            testTag = "theme_selector_button",
-                            themeGoldAccent = themeGoldAccent,
-                            themeTextColor = themeTextColor,
-                            isDark = isDark
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    // Bagian Kanan: Tombol Close (Tutup / Akhiri Menonton) dengan spesifikasi seragam
+                if (isLoadingChannels) {
                     Surface(
-                        onClick = {
-                            recordUserInteraction()
-                            onCloseToDashboard()
-                        },
-                        shape = RoundedCornerShape(10.dp),
-                        color = Color(0x3DFF3B30),
-                        border = BorderStroke(1.dp, Color(0xFFFF453A)),
-                        modifier = Modifier
-                            .height(34.dp)
-                            .testTag("live_tv_close_watching_button")
+                        color = Color.Black.copy(alpha = 0.85f),
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.padding(16.dp)
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = "Tutup / Akhiri Menonton",
-                                tint = Color(0xFFFF5252),
-                                modifier = Modifier.size(15.dp)
+                            CircularProgressIndicator(
+                                color = Color(0xFFFFD700),
+                                strokeWidth = 3.dp,
+                                modifier = Modifier.size(24.dp)
                             )
+                            Spacer(modifier = Modifier.width(12.dp))
                             Text(
-                                text = "Tutup",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontSize = 11.sp,
+                                text = "Mengambil siaran IPTV...",
+                                style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White
                             )
                         }
                     }
                 }
+            }
+
+            // ATAS BAGIAN JUDUL APLIKASI, SEMUA KONTROL LENGKAP DALAM 1 BARIS SERAGAM, DAN TOMBOL CLOSE
+            AnimatedVisibility(
+                visible = if (isFullScreen) showControlsInFullScreen else areControlsVisible,
+                enter = fadeIn() + slideInVertically(initialOffsetY = { -it }),
+                exit = fadeOut() + slideOutVertically(targetOffsetY = { -it }),
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(start = 10.dp, top = 6.dp, end = 10.dp)
+            ) {
+                topWatchingBarContent()
             }
         }
 
@@ -1099,24 +1140,19 @@ fun LiveStreamingScreen(
                             shape = RoundedCornerShape(10.dp),
                             color = Color(0xFF332912),
                             border = BorderStroke(1.dp, Color(0xFFFFD700)),
-                            modifier = Modifier.testTag("exit_fullscreen_button")
+                            modifier = Modifier
+                                .size(34.dp)
+                                .testTag("exit_fullscreen_button")
                         ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier.fillMaxSize()
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.FullscreenExit,
-                                    contentDescription = "Layar Normal",
+                                    contentDescription = "Keluar Layar Penuh",
                                     tint = Color(0xFFFFD700),
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = "Normal",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFFFFD700)
+                                    modifier = Modifier.size(17.dp)
                                 )
                             }
                         }
@@ -1127,11 +1163,13 @@ fun LiveStreamingScreen(
                             shape = RoundedCornerShape(10.dp),
                             color = Color(0xFF1E202B),
                             border = BorderStroke(1.dp, Color(0xFFFFD700).copy(alpha = 0.8f)),
-                            modifier = Modifier.testTag("fullscreen_theme_button")
+                            modifier = Modifier
+                                .size(34.dp)
+                                .testTag("fullscreen_theme_button")
                         ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier.fillMaxSize()
                             ) {
                                 Icon(
                                     imageVector = when (currentThemeMode) {
@@ -1139,20 +1177,9 @@ fun LiveStreamingScreen(
                                         AppThemeMode.DARK -> Icons.Default.DarkMode
                                         AppThemeMode.SYSTEM -> Icons.Default.BrightnessAuto
                                     },
-                                    contentDescription = "Pilihan Warna",
+                                    contentDescription = "Pilihan Warna / Tema",
                                     tint = Color(0xFFFFD700),
-                                    modifier = Modifier.size(15.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = when (currentThemeMode) {
-                                        AppThemeMode.LIGHT -> "Terang"
-                                        AppThemeMode.DARK -> "Gelap"
-                                        AppThemeMode.SYSTEM -> "Sistem"
-                                    },
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
+                                    modifier = Modifier.size(17.dp)
                                 )
                             }
                         }
@@ -1166,11 +1193,13 @@ fun LiveStreamingScreen(
                             shape = RoundedCornerShape(10.dp),
                             color = Color(0xFF1E202B),
                             border = BorderStroke(1.dp, Color(0xFFFFD700).copy(alpha = 0.8f)),
-                            modifier = Modifier.testTag("fullscreen_orientation_button")
+                            modifier = Modifier
+                                .size(34.dp)
+                                .testTag("fullscreen_orientation_button")
                         ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier.fillMaxSize()
                             ) {
                                 Icon(
                                     imageVector = when (currentOrientationMode) {
@@ -1180,14 +1209,7 @@ fun LiveStreamingScreen(
                                     },
                                     contentDescription = "Mode Orientasi",
                                     tint = Color(0xFFFFD700),
-                                    modifier = Modifier.size(15.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = currentOrientationMode.title,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
+                                    modifier = Modifier.size(17.dp)
                                 )
                             }
                         }
@@ -1201,11 +1223,13 @@ fun LiveStreamingScreen(
                             shape = RoundedCornerShape(10.dp),
                             color = Color(0xFF1E202B),
                             border = BorderStroke(1.dp, Color(0xFFFFD700).copy(alpha = 0.8f)),
-                            modifier = Modifier.testTag("fullscreen_sort_button")
+                            modifier = Modifier
+                                .size(34.dp)
+                                .testTag("fullscreen_sort_button")
                         ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier.fillMaxSize()
                             ) {
                                 Icon(
                                     imageVector = when (currentSortMode) {
@@ -1215,18 +1239,7 @@ fun LiveStreamingScreen(
                                     },
                                     contentDescription = "Urutan Channel",
                                     tint = Color(0xFFFFD700),
-                                    modifier = Modifier.size(15.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = when (currentSortMode) {
-                                        ChannelSortMode.ORIGINAL -> "Asli"
-                                        ChannelSortMode.ASCENDING -> "A - Z"
-                                        ChannelSortMode.DESCENDING -> "Z - A"
-                                    },
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
+                                    modifier = Modifier.size(17.dp)
                                 )
                             }
                         }
@@ -1245,26 +1258,24 @@ fun LiveStreamingScreen(
                 properties = DialogProperties(usePlatformDefaultWidth = false)
             ) {
                 Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .statusBarsPadding()
-                        .padding(horizontal = 24.dp, vertical = 40.dp),
+                    modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
                     Surface(
                         modifier = Modifier
-                            .fillMaxWidth(0.92f)
+                            .width(dialogWidth75)
+                            .height(dialogHeight75)
                             .testTag("orientation_selection_dialog"),
-                        shape = RoundedCornerShape(24.dp),
+                        shape = RoundedCornerShape(20.dp),
                         color = themeControlBarBg,
                         border = BorderStroke(1.4.dp, themeGoldAccent),
                         tonalElevation = 10.dp,
-                        shadowElevation = 12.dp
+                        shadowElevation = 16.dp
                     ) {
                         Column(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(20.dp)
+                                .fillMaxSize()
+                                .padding(16.dp)
                         ) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -1276,7 +1287,7 @@ fun LiveStreamingScreen(
                                         imageVector = Icons.Default.ScreenRotation,
                                         contentDescription = null,
                                         tint = themeGoldAccent,
-                                        modifier = Modifier.size(24.dp)
+                                        modifier = Modifier.size(22.dp)
                                     )
                                     Spacer(modifier = Modifier.width(10.dp))
                                     Text(
@@ -1298,89 +1309,96 @@ fun LiveStreamingScreen(
                                 }
                             }
 
-                            Spacer(modifier = Modifier.height(14.dp))
+                            Spacer(modifier = Modifier.height(10.dp))
 
-                            // 3 Orientation Options
-                            listOf(
-                                Triple(AppOrientationMode.PORTRAIT, Icons.Default.StayCurrentPortrait, "Mode Portait"),
-                                Triple(AppOrientationMode.LANDSCAPE, Icons.Default.StayCurrentLandscape, "Mode Landscape"),
-                                Triple(AppOrientationMode.AUTO, Icons.Default.ScreenRotation, "Automatic (Sesuai Device)")
-                            ).forEach { (mode, icon, label) ->
-                                val isSelected = currentOrientationMode == mode
-                                Card(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 5.dp)
-                                        .clip(RoundedCornerShape(14.dp))
-                                        .clickable {
-                                            applyOrientation(mode)
-                                            recordUserInteraction()
-                                            showOrientationDialog = false
-                                        }
-                                        .testTag("orientation_option_${mode.name.lowercase()}"),
-                                    colors = CardDefaults.cardColors(
-                                        containerColor = if (isSelected) {
-                                            if (isDark) Color(0xFF332912) else Color(0xFFFFF6DF)
-                                        } else {
-                                            if (isDark) Color(0xFF1B1C28) else Color(0xFFF3F5FA)
-                                        }
-                                    ),
-                                    border = if (isSelected) BorderStroke(1.5.dp, themeGoldAccent)
-                                             else BorderStroke(0.6.dp, if (isDark) Color(0xFF33354A) else Color(0xFFD6DBE6))
-                                ) {
-                                    Row(
+                            // 3 Orientation Options (Scrollable)
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f)
+                                    .verticalScroll(rememberScrollState()),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                listOf(
+                                    Triple(AppOrientationMode.PORTRAIT, Icons.Default.StayCurrentPortrait, "Mode Portait"),
+                                    Triple(AppOrientationMode.LANDSCAPE, Icons.Default.StayCurrentLandscape, "Mode Landscape"),
+                                    Triple(AppOrientationMode.AUTO, Icons.Default.ScreenRotation, "Automatic (Sesuai Device)")
+                                ).forEach { (mode, icon, label) ->
+                                    val isSelected = currentOrientationMode == mode
+                                    Card(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .padding(horizontal = 14.dp, vertical = 12.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.SpaceBetween
+                                            .clip(RoundedCornerShape(14.dp))
+                                            .clickable {
+                                                applyOrientation(mode)
+                                                recordUserInteraction()
+                                                showOrientationDialog = false
+                                            }
+                                            .testTag("orientation_option_${mode.name.lowercase()}"),
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = if (isSelected) {
+                                                if (isDark) Color(0xFF332912) else Color(0xFFFFF6DF)
+                                            } else {
+                                                if (isDark) Color(0xFF1B1C28) else Color(0xFFF3F5FA)
+                                            }
+                                        ),
+                                        border = if (isSelected) BorderStroke(1.5.dp, themeGoldAccent)
+                                                 else BorderStroke(0.6.dp, if (isDark) Color(0xFF33354A) else Color(0xFFD6DBE6))
                                     ) {
                                         Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 14.dp, vertical = 12.dp),
                                             verticalAlignment = Alignment.CenterVertically,
-                                            modifier = Modifier.weight(1f)
+                                            horizontalArrangement = Arrangement.SpaceBetween
                                         ) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(36.dp)
-                                                    .clip(CircleShape)
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(36.dp)
+                                                        .clip(CircleShape)
                                                     .background(
                                                         if (isSelected) themeGoldAccent.copy(alpha = 0.2f)
                                                         else if (isDark) Color(0xFF252636) else Color(0xFFE2E6F0)
                                                     ),
-                                                contentAlignment = Alignment.Center
-                                            ) {
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Icon(
+                                                        imageVector = icon,
+                                                        contentDescription = null,
+                                                        tint = if (isSelected) themeGoldAccent else themeTextSecondary,
+                                                        modifier = Modifier.size(20.dp)
+                                                    )
+                                                }
+
+                                                Spacer(modifier = Modifier.width(12.dp))
+
+                                                Column {
+                                                    Text(
+                                                        text = label,
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Bold,
+                                                        color = if (isSelected) themeGoldAccent else themeTextColor
+                                                    )
+                                                    Text(
+                                                        text = mode.subtitle,
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = themeTextSecondary
+                                                    )
+                                                }
+                                            }
+
+                                            if (isSelected) {
                                                 Icon(
-                                                    imageVector = icon,
-                                                    contentDescription = null,
-                                                    tint = if (isSelected) themeGoldAccent else themeTextSecondary,
+                                                    imageVector = Icons.Default.Check,
+                                                    contentDescription = "Dipilih",
+                                                    tint = themeGoldAccent,
                                                     modifier = Modifier.size(20.dp)
                                                 )
                                             }
-
-                                            Spacer(modifier = Modifier.width(12.dp))
-
-                                            Column {
-                                                Text(
-                                                    text = label,
-                                                    style = MaterialTheme.typography.bodyMedium,
-                                                    fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Bold,
-                                                    color = if (isSelected) themeGoldAccent else themeTextColor
-                                                )
-                                                Text(
-                                                    text = mode.subtitle,
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = themeTextSecondary
-                                                )
-                                            }
-                                        }
-
-                                        if (isSelected) {
-                                            Icon(
-                                                imageVector = Icons.Default.Check,
-                                                contentDescription = "Dipilih",
-                                                tint = themeGoldAccent,
-                                                modifier = Modifier.size(20.dp)
-                                            )
                                         }
                                     }
                                 }
@@ -1401,26 +1419,24 @@ fun LiveStreamingScreen(
                 properties = DialogProperties(usePlatformDefaultWidth = false)
             ) {
                 Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .statusBarsPadding()
-                        .padding(horizontal = 24.dp, vertical = 40.dp),
+                    modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
                     Surface(
                         modifier = Modifier
-                            .fillMaxWidth(0.92f)
+                            .width(dialogWidth75)
+                            .height(dialogHeight75)
                             .testTag("video_aspect_ratio_dialog"),
-                        shape = RoundedCornerShape(24.dp),
+                        shape = RoundedCornerShape(20.dp),
                         color = themeControlBarBg,
                         border = BorderStroke(1.4.dp, themeGoldAccent),
                         tonalElevation = 10.dp,
-                        shadowElevation = 12.dp
+                        shadowElevation = 16.dp
                     ) {
                         Column(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(20.dp)
+                                .fillMaxSize()
+                                .padding(16.dp)
                         ) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -1432,7 +1448,7 @@ fun LiveStreamingScreen(
                                         imageVector = Icons.Default.AspectRatio,
                                         contentDescription = null,
                                         tint = themeGoldAccent,
-                                        modifier = Modifier.size(24.dp)
+                                        modifier = Modifier.size(22.dp)
                                     )
                                     Spacer(modifier = Modifier.width(10.dp))
                                     Text(
@@ -1454,85 +1470,92 @@ fun LiveStreamingScreen(
                                 }
                             }
 
-                            Spacer(modifier = Modifier.height(14.dp))
+                            Spacer(modifier = Modifier.height(10.dp))
 
-                            VideoAspectRatioMode.values().forEach { mode ->
-                                val isSelected = currentAspectRatioMode == mode
-                                Card(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 4.dp)
-                                        .clip(RoundedCornerShape(14.dp))
-                                        .clickable {
-                                            currentAspectRatioMode = mode
-                                            recordUserInteraction()
-                                            showAspectRatioDialog = false
-                                            Toast.makeText(context, "Mode Resolusi: ${mode.title}", Toast.LENGTH_SHORT).show()
-                                        }
-                                        .testTag("aspect_ratio_option_${mode.name.lowercase()}"),
-                                    colors = CardDefaults.cardColors(
-                                        containerColor = if (isSelected) {
-                                            if (isDark) Color(0xFF332912) else Color(0xFFFFF6DF)
-                                        } else {
-                                            if (isDark) Color(0xFF1B1C28) else Color(0xFFF3F5FA)
-                                        }
-                                    ),
-                                    border = if (isSelected) BorderStroke(1.5.dp, themeGoldAccent)
-                                             else BorderStroke(0.6.dp, if (isDark) Color(0xFF33354A) else Color(0xFFD6DBE6))
-                                ) {
-                                    Row(
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f)
+                                    .verticalScroll(rememberScrollState()),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                VideoAspectRatioMode.values().forEach { mode ->
+                                    val isSelected = currentAspectRatioMode == mode
+                                    Card(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .padding(horizontal = 14.dp, vertical = 12.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.SpaceBetween
+                                            .clip(RoundedCornerShape(14.dp))
+                                            .clickable {
+                                                currentAspectRatioMode = mode
+                                                recordUserInteraction()
+                                                showAspectRatioDialog = false
+                                                Toast.makeText(context, "Mode Resolusi: ${mode.title}", Toast.LENGTH_SHORT).show()
+                                            }
+                                            .testTag("aspect_ratio_option_${mode.name.lowercase()}"),
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = if (isSelected) {
+                                                if (isDark) Color(0xFF332912) else Color(0xFFFFF6DF)
+                                            } else {
+                                                if (isDark) Color(0xFF1B1C28) else Color(0xFFF3F5FA)
+                                            }
+                                        ),
+                                        border = if (isSelected) BorderStroke(1.5.dp, themeGoldAccent)
+                                                 else BorderStroke(0.6.dp, if (isDark) Color(0xFF33354A) else Color(0xFFD6DBE6))
                                     ) {
                                         Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 14.dp, vertical = 12.dp),
                                             verticalAlignment = Alignment.CenterVertically,
-                                            modifier = Modifier.weight(1f)
+                                            horizontalArrangement = Arrangement.SpaceBetween
                                         ) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(36.dp)
-                                                    .clip(CircleShape)
-                                                    .background(
-                                                        if (isSelected) themeGoldAccent.copy(alpha = 0.2f)
-                                                        else if (isDark) Color(0xFF252636) else Color(0xFFE2E6F0)
-                                                    ),
-                                                contentAlignment = Alignment.Center
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                modifier = Modifier.weight(1f)
                                             ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(36.dp)
+                                                        .clip(CircleShape)
+                                                        .background(
+                                                            if (isSelected) themeGoldAccent.copy(alpha = 0.2f)
+                                                            else if (isDark) Color(0xFF252636) else Color(0xFFE2E6F0)
+                                                        ),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.AspectRatio,
+                                                        contentDescription = null,
+                                                        tint = if (isSelected) themeGoldAccent else themeTextSecondary,
+                                                        modifier = Modifier.size(20.dp)
+                                                    )
+                                                }
+
+                                                Spacer(modifier = Modifier.width(12.dp))
+
+                                                Column {
+                                                    Text(
+                                                        text = mode.title,
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Bold,
+                                                        color = if (isSelected) themeGoldAccent else themeTextColor
+                                                    )
+                                                    Text(
+                                                        text = mode.subtitle,
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = themeTextSecondary
+                                                    )
+                                                }
+                                            }
+
+                                            if (isSelected) {
                                                 Icon(
-                                                    imageVector = Icons.Default.AspectRatio,
-                                                    contentDescription = null,
-                                                    tint = if (isSelected) themeGoldAccent else themeTextSecondary,
+                                                    imageVector = Icons.Default.Check,
+                                                    contentDescription = "Dipilih",
+                                                    tint = themeGoldAccent,
                                                     modifier = Modifier.size(20.dp)
                                                 )
                                             }
-
-                                            Spacer(modifier = Modifier.width(12.dp))
-
-                                            Column {
-                                                Text(
-                                                    text = mode.title,
-                                                    style = MaterialTheme.typography.bodyMedium,
-                                                    fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Bold,
-                                                    color = if (isSelected) themeGoldAccent else themeTextColor
-                                                )
-                                                Text(
-                                                    text = mode.subtitle,
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = themeTextSecondary
-                                                )
-                                            }
-                                        }
-
-                                        if (isSelected) {
-                                            Icon(
-                                                imageVector = Icons.Default.Check,
-                                                contentDescription = "Dipilih",
-                                                tint = themeGoldAccent,
-                                                modifier = Modifier.size(20.dp)
-                                            )
                                         }
                                     }
                                 }
@@ -1550,26 +1573,24 @@ fun LiveStreamingScreen(
                 properties = DialogProperties(usePlatformDefaultWidth = false)
             ) {
                 Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .statusBarsPadding()
-                        .padding(horizontal = 24.dp, vertical = 40.dp),
+                    modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
                     Surface(
                         modifier = Modifier
-                            .fillMaxWidth(0.92f)
+                            .width(dialogWidth75)
+                            .height(dialogHeight75)
                             .testTag("theme_selection_dialog"),
-                        shape = RoundedCornerShape(24.dp),
+                        shape = RoundedCornerShape(20.dp),
                         color = themeControlBarBg,
                         border = BorderStroke(1.4.dp, themeGoldAccent),
                         tonalElevation = 10.dp,
-                        shadowElevation = 12.dp
+                        shadowElevation = 16.dp
                     ) {
                         Column(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(20.dp)
+                                .fillMaxSize()
+                                .padding(16.dp)
                         ) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -1581,7 +1602,7 @@ fun LiveStreamingScreen(
                                         imageVector = Icons.Default.BrightnessAuto,
                                         contentDescription = null,
                                         tint = themeGoldAccent,
-                                        modifier = Modifier.size(24.dp)
+                                        modifier = Modifier.size(22.dp)
                                     )
                                     Spacer(modifier = Modifier.width(10.dp))
                                     Text(
@@ -1600,89 +1621,96 @@ fun LiveStreamingScreen(
                                 }
                             }
 
-                            Spacer(modifier = Modifier.height(14.dp))
+                            Spacer(modifier = Modifier.height(10.dp))
 
-                            // 3 Theme Options Cards
-                            listOf(
-                                Triple(AppThemeMode.LIGHT, Icons.Default.LightMode, "Warna Terang"),
-                                Triple(AppThemeMode.DARK, Icons.Default.DarkMode, "Warna Gelap"),
-                                Triple(AppThemeMode.SYSTEM, Icons.Default.BrightnessAuto, "Default Perangkat")
-                            ).forEach { (mode, icon, label) ->
-                                val isSelected = currentThemeMode == mode
-                                Card(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 5.dp)
-                                        .clip(RoundedCornerShape(14.dp))
-                                        .clickable {
-                                            onThemeModeChange(mode)
-                                            AppThemeMode.saveToPreferences(context, mode)
-                                            showThemeDialog = false
-                                        }
-                                        .testTag("theme_option_${mode.name.lowercase()}"),
-                                    colors = CardDefaults.cardColors(
-                                        containerColor = if (isSelected) {
-                                            if (isDark) Color(0xFF332912) else Color(0xFFFFF6DF)
-                                        } else {
-                                            if (isDark) Color(0xFF1B1C28) else Color(0xFFF3F5FA)
-                                        }
-                                    ),
-                                    border = if (isSelected) BorderStroke(1.5.dp, themeGoldAccent)
-                                             else BorderStroke(0.6.dp, if (isDark) Color(0xFF33354A) else Color(0xFFD6DBE6))
-                                ) {
-                                    Row(
+                            // 3 Theme Options Cards (Scrollable)
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f)
+                                    .verticalScroll(rememberScrollState()),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                listOf(
+                                    Triple(AppThemeMode.LIGHT, Icons.Default.LightMode, "Warna Terang"),
+                                    Triple(AppThemeMode.DARK, Icons.Default.DarkMode, "Warna Gelap"),
+                                    Triple(AppThemeMode.SYSTEM, Icons.Default.BrightnessAuto, "Default Perangkat")
+                                ).forEach { (mode, icon, label) ->
+                                    val isSelected = currentThemeMode == mode
+                                    Card(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .padding(horizontal = 14.dp, vertical = 12.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.SpaceBetween
+                                            .clip(RoundedCornerShape(14.dp))
+                                            .clickable {
+                                                onThemeModeChange(mode)
+                                                AppThemeMode.saveToPreferences(context, mode)
+                                                showThemeDialog = false
+                                            }
+                                            .testTag("theme_option_${mode.name.lowercase()}"),
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = if (isSelected) {
+                                                if (isDark) Color(0xFF332912) else Color(0xFFFFF6DF)
+                                            } else {
+                                                if (isDark) Color(0xFF1B1C28) else Color(0xFFF3F5FA)
+                                            }
+                                        ),
+                                        border = if (isSelected) BorderStroke(1.5.dp, themeGoldAccent)
+                                                 else BorderStroke(0.6.dp, if (isDark) Color(0xFF33354A) else Color(0xFFD6DBE6))
                                     ) {
                                         Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 14.dp, vertical = 12.dp),
                                             verticalAlignment = Alignment.CenterVertically,
-                                            modifier = Modifier.weight(1f)
+                                            horizontalArrangement = Arrangement.SpaceBetween
                                         ) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(36.dp)
-                                                    .clip(CircleShape)
-                                                    .background(
-                                                        if (isSelected) themeGoldAccent.copy(alpha = 0.2f)
-                                                        else if (isDark) Color(0xFF252636) else Color(0xFFE2E6F0)
-                                                    ),
-                                                contentAlignment = Alignment.Center
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                modifier = Modifier.weight(1f)
                                             ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(36.dp)
+                                                        .clip(CircleShape)
+                                                        .background(
+                                                            if (isSelected) themeGoldAccent.copy(alpha = 0.2f)
+                                                            else if (isDark) Color(0xFF252636) else Color(0xFFE2E6F0)
+                                                        ),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Icon(
+                                                        imageVector = icon,
+                                                        contentDescription = null,
+                                                        tint = if (isSelected) themeGoldAccent else themeTextSecondary,
+                                                        modifier = Modifier.size(20.dp)
+                                                    )
+                                                }
+
+                                                Spacer(modifier = Modifier.width(12.dp))
+
+                                                Column {
+                                                    Text(
+                                                        text = label,
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Bold,
+                                                        color = if (isSelected) themeGoldAccent else themeTextColor
+                                                    )
+                                                    Text(
+                                                        text = mode.subtitle,
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = themeTextSecondary
+                                                    )
+                                                }
+                                            }
+
+                                            if (isSelected) {
                                                 Icon(
-                                                    imageVector = icon,
-                                                    contentDescription = null,
-                                                    tint = if (isSelected) themeGoldAccent else themeTextSecondary,
+                                                    imageVector = Icons.Default.Check,
+                                                    contentDescription = "Dipilih",
+                                                    tint = themeGoldAccent,
                                                     modifier = Modifier.size(20.dp)
                                                 )
                                             }
-
-                                            Spacer(modifier = Modifier.width(12.dp))
-
-                                            Column {
-                                                Text(
-                                                    text = label,
-                                                    style = MaterialTheme.typography.bodyMedium,
-                                                    fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Bold,
-                                                    color = if (isSelected) themeGoldAccent else themeTextColor
-                                                )
-                                                Text(
-                                                    text = mode.subtitle,
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = themeTextSecondary
-                                                )
-                                            }
-                                        }
-
-                                        if (isSelected) {
-                                            Icon(
-                                                imageVector = Icons.Default.Check,
-                                                contentDescription = "Dipilih",
-                                                tint = themeGoldAccent,
-                                                modifier = Modifier.size(20.dp)
-                                            )
                                         }
                                     }
                                 }
@@ -1703,26 +1731,24 @@ fun LiveStreamingScreen(
                 properties = DialogProperties(usePlatformDefaultWidth = false)
             ) {
                 Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .statusBarsPadding()
-                        .padding(horizontal = 24.dp, vertical = 40.dp),
+                    modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
                     Surface(
                         modifier = Modifier
-                            .fillMaxWidth(0.92f)
+                            .width(dialogWidth75)
+                            .height(dialogHeight75)
                             .testTag("channel_sort_dialog"),
-                        shape = RoundedCornerShape(24.dp),
+                        shape = RoundedCornerShape(20.dp),
                         color = themeControlBarBg,
                         border = BorderStroke(1.4.dp, themeGoldAccent),
                         tonalElevation = 10.dp,
-                        shadowElevation = 12.dp
+                        shadowElevation = 16.dp
                     ) {
                         Column(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(20.dp)
+                                .fillMaxSize()
+                                .padding(16.dp)
                         ) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -1734,7 +1760,7 @@ fun LiveStreamingScreen(
                                         imageVector = Icons.Default.SortByAlpha,
                                         contentDescription = null,
                                         tint = themeGoldAccent,
-                                        modifier = Modifier.size(24.dp)
+                                        modifier = Modifier.size(22.dp)
                                     )
                                     Spacer(modifier = Modifier.width(10.dp))
                                     Text(
@@ -1756,91 +1782,98 @@ fun LiveStreamingScreen(
                                 }
                             }
 
-                            Spacer(modifier = Modifier.height(14.dp))
+                            Spacer(modifier = Modifier.height(10.dp))
 
-                            // 3 Sort Options with Icons
-                            listOf(
-                                Triple(ChannelSortMode.ORIGINAL, Icons.Default.FormatListNumbered, "Urutan Asli Playlist"),
-                                Triple(ChannelSortMode.ASCENDING, Icons.Default.ArrowUpward, "Urutan A - Z (Ascending)"),
-                                Triple(ChannelSortMode.DESCENDING, Icons.Default.ArrowDownward, "Urutan Z - A (Descending)")
-                            ).forEach { (mode, icon, label) ->
-                                val isSelected = currentSortMode == mode
-                                Card(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 5.dp)
-                                        .clip(RoundedCornerShape(14.dp))
-                                        .clickable {
-                                            currentSortMode = mode
-                                            iptvRepository.saveSortMode(context, mode)
-                                            recordUserInteraction()
-                                            showSortDialog = false
-                                            Toast.makeText(context, "Daftar diurutkan: $label", Toast.LENGTH_SHORT).show()
-                                        }
-                                        .testTag("sort_option_${mode.name.lowercase()}"),
-                                    colors = CardDefaults.cardColors(
-                                        containerColor = if (isSelected) {
-                                            if (isDark) Color(0xFF332912) else Color(0xFFFFF6DF)
-                                        } else {
-                                            if (isDark) Color(0xFF1B1C28) else Color(0xFFF3F5FA)
-                                        }
-                                    ),
-                                    border = if (isSelected) BorderStroke(1.5.dp, themeGoldAccent)
-                                             else BorderStroke(0.6.dp, if (isDark) Color(0xFF33354A) else Color(0xFFD6DBE6))
-                                ) {
-                                    Row(
+                            // 3 Sort Options with Icons (Scrollable)
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f)
+                                    .verticalScroll(rememberScrollState()),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                listOf(
+                                    Triple(ChannelSortMode.ORIGINAL, Icons.Default.FormatListNumbered, "Urutan Asli Playlist"),
+                                    Triple(ChannelSortMode.ASCENDING, Icons.Default.ArrowUpward, "Urutan A - Z (Ascending)"),
+                                    Triple(ChannelSortMode.DESCENDING, Icons.Default.ArrowDownward, "Urutan Z - A (Descending)")
+                                ).forEach { (mode, icon, label) ->
+                                    val isSelected = currentSortMode == mode
+                                    Card(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .padding(horizontal = 14.dp, vertical = 12.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.SpaceBetween
+                                            .clip(RoundedCornerShape(14.dp))
+                                            .clickable {
+                                                currentSortMode = mode
+                                                iptvRepository.saveSortMode(context, mode)
+                                                recordUserInteraction()
+                                                showSortDialog = false
+                                                Toast.makeText(context, "Daftar diurutkan: $label", Toast.LENGTH_SHORT).show()
+                                            }
+                                            .testTag("sort_option_${mode.name.lowercase()}"),
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = if (isSelected) {
+                                                if (isDark) Color(0xFF332912) else Color(0xFFFFF6DF)
+                                            } else {
+                                                if (isDark) Color(0xFF1B1C28) else Color(0xFFF3F5FA)
+                                            }
+                                        ),
+                                        border = if (isSelected) BorderStroke(1.5.dp, themeGoldAccent)
+                                                 else BorderStroke(0.6.dp, if (isDark) Color(0xFF33354A) else Color(0xFFD6DBE6))
                                     ) {
                                         Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 14.dp, vertical = 12.dp),
                                             verticalAlignment = Alignment.CenterVertically,
-                                            modifier = Modifier.weight(1f)
+                                            horizontalArrangement = Arrangement.SpaceBetween
                                         ) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(36.dp)
-                                                    .clip(CircleShape)
-                                                    .background(
-                                                        if (isSelected) themeGoldAccent.copy(alpha = 0.2f)
-                                                        else if (isDark) Color(0xFF252636) else Color(0xFFE2E6F0)
-                                                    ),
-                                                contentAlignment = Alignment.Center
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                modifier = Modifier.weight(1f)
                                             ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(36.dp)
+                                                        .clip(CircleShape)
+                                                        .background(
+                                                            if (isSelected) themeGoldAccent.copy(alpha = 0.2f)
+                                                            else if (isDark) Color(0xFF252636) else Color(0xFFE2E6F0)
+                                                        ),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Icon(
+                                                        imageVector = icon,
+                                                        contentDescription = null,
+                                                        tint = if (isSelected) themeGoldAccent else themeTextSecondary,
+                                                        modifier = Modifier.size(20.dp)
+                                                    )
+                                                }
+
+                                                Spacer(modifier = Modifier.width(12.dp))
+
+                                                Column {
+                                                    Text(
+                                                        text = label,
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Bold,
+                                                        color = if (isSelected) themeGoldAccent else themeTextColor
+                                                    )
+                                                    Text(
+                                                        text = mode.subtitle,
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = themeTextSecondary
+                                                    )
+                                                }
+                                            }
+
+                                            if (isSelected) {
                                                 Icon(
-                                                    imageVector = icon,
-                                                    contentDescription = null,
-                                                    tint = if (isSelected) themeGoldAccent else themeTextSecondary,
+                                                    imageVector = Icons.Default.Check,
+                                                    contentDescription = "Dipilih",
+                                                    tint = themeGoldAccent,
                                                     modifier = Modifier.size(20.dp)
                                                 )
                                             }
-
-                                            Spacer(modifier = Modifier.width(12.dp))
-
-                                            Column {
-                                                Text(
-                                                    text = label,
-                                                    style = MaterialTheme.typography.bodyMedium,
-                                                    fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Bold,
-                                                    color = if (isSelected) themeGoldAccent else themeTextColor
-                                                )
-                                                Text(
-                                                    text = mode.subtitle,
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = themeTextSecondary
-                                                )
-                                            }
-                                        }
-
-                                        if (isSelected) {
-                                            Icon(
-                                                imageVector = Icons.Default.Check,
-                                                contentDescription = "Dipilih",
-                                                tint = themeGoldAccent,
-                                                modifier = Modifier.size(20.dp)
-                                            )
                                         }
                                     }
                                 }
@@ -1851,33 +1884,32 @@ fun LiveStreamingScreen(
             }
         }
 
-        // Audio Volume Slider Dialog / Popup
+        // Audio Volume Slider Dialog / Popup (Centered, 75% spek perangkat)
         if (showAudioVolumeDialog) {
             Dialog(
                 onDismissRequest = { showAudioVolumeDialog = false },
                 properties = DialogProperties(usePlatformDefaultWidth = false)
             ) {
                 Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .statusBarsPadding()
-                        .padding(top = 16.dp, bottom = 16.dp),
-                    contentAlignment = Alignment.TopCenter
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
                 ) {
                     Surface(
                         modifier = Modifier
-                            .fillMaxWidth(0.88f)
+                            .width(dialogWidth75)
+                            .height(dialogHeight75)
                             .testTag("audio_volume_popup"),
-                        shape = RoundedCornerShape(24.dp),
+                        shape = RoundedCornerShape(20.dp),
                         color = themeControlBarBg,
-                        border = BorderStroke(1.2.dp, themeGoldAccent),
-                        tonalElevation = 8.dp,
-                        shadowElevation = 8.dp
+                        border = BorderStroke(1.4.dp, themeGoldAccent),
+                        tonalElevation = 10.dp,
+                        shadowElevation = 16.dp
                     ) {
                         Column(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(20.dp)
+                                .fillMaxSize()
+                                .padding(16.dp),
+                            verticalArrangement = Arrangement.SpaceBetween
                         ) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -1886,7 +1918,7 @@ fun LiveStreamingScreen(
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(
-                                        imageVector = Icons.Default.VolumeUp,
+                                        imageVector = Icons.AutoMirrored.Filled.VolumeUp,
                                         contentDescription = null,
                                         tint = themeGoldAccent,
                                         modifier = Modifier.size(22.dp)
@@ -1908,72 +1940,78 @@ fun LiveStreamingScreen(
                                 }
                             }
 
-                            Spacer(modifier = Modifier.height(16.dp))
-
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.fillMaxWidth()
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f)
+                                    .verticalScroll(rememberScrollState()),
+                                verticalArrangement = Arrangement.Center
                             ) {
-                                IconButton(onClick = {
-                                    volumeLevel = 0f
-                                    val targetVolIndex = 0
-                                    try { audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, targetVolIndex, 0) } catch (_: Exception) {}
-                                    exoPlayer.volume = 0f
-                                }) {
-                                    Icon(
-                                        imageVector = if (volumeLevel == 0f) Icons.Default.VolumeOff else Icons.Default.VolumeMute,
-                                        contentDescription = "Mute",
-                                        tint = Color.Gray
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    IconButton(onClick = {
+                                        volumeLevel = 0f
+                                        val targetVolIndex = 0
+                                        try { audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, targetVolIndex, 0) } catch (_: Exception) {}
+                                        exoPlayer.volume = 0f
+                                    }) {
+                                        Icon(
+                                            imageVector = if (volumeLevel == 0f) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeMute,
+                                            contentDescription = "Mute",
+                                            tint = Color.Gray
+                                        )
+                                    }
+
+                                    Slider(
+                                        value = volumeLevel,
+                                        onValueChange = { newVol ->
+                                            volumeLevel = newVol
+                                            val targetVolIndex = (newVol * maxSystemVolume).toInt().coerceIn(0, maxSystemVolume)
+                                            try {
+                                                audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, targetVolIndex, 0)
+                                            } catch (_: Exception) {}
+                                            exoPlayer.volume = newVol
+                                        },
+                                        valueRange = 0f..1f,
+                                        modifier = Modifier.weight(1f)
                                     )
+
+                                    IconButton(onClick = {
+                                        volumeLevel = 1f
+                                        val targetVolIndex = maxSystemVolume
+                                        try { audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, targetVolIndex, 0) } catch (_: Exception) {}
+                                        exoPlayer.volume = 1f
+                                    }) {
+                                        Icon(
+                                            imageVector = Icons.AutoMirrored.Filled.VolumeUp,
+                                            contentDescription = "Max Volume",
+                                            tint = themeGoldAccent
+                                        )
+                                    }
                                 }
 
-                                Slider(
-                                    value = volumeLevel,
-                                    onValueChange = { newVol ->
-                                        volumeLevel = newVol
-                                        val targetVolIndex = (newVol * maxSystemVolume).toInt().coerceIn(0, maxSystemVolume)
-                                        try {
-                                            audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, targetVolIndex, 0)
-                                        } catch (_: Exception) {}
-                                        exoPlayer.volume = newVol
-                                    },
-                                    valueRange = 0f..1f,
-                                    modifier = Modifier.weight(1f)
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                Text(
+                                    text = "Volume Perangkat: ${(volumeLevel * 100).toInt()}%",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = themeGoldAccent,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.fillMaxWidth()
                                 )
-
-                                IconButton(onClick = {
-                                    volumeLevel = 1f
-                                    val targetVolIndex = maxSystemVolume
-                                    try { audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, targetVolIndex, 0) } catch (_: Exception) {}
-                                    exoPlayer.volume = 1f
-                                }) {
-                                    Icon(
-                                        imageVector = Icons.Default.VolumeUp,
-                                        contentDescription = "Max Volume",
-                                        tint = themeGoldAccent
-                                    )
-                                }
                             }
-
-                            Spacer(modifier = Modifier.height(8.dp))
-
-                            Text(
-                                text = "Volume Perangkat: ${(volumeLevel * 100).toInt()}%",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = themeGoldAccent,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.fillMaxWidth()
-                            )
                         }
                     }
                 }
             }
         }
 
-        // Playlist Settings Sheet
+        // Playlist Settings Dialog
         if (showPlaylistSettingsSheet) {
-            PlaylistSettingsBottomSheet(
+            PlaylistSettingsDialog(
                 iptvRepository = iptvRepository,
                 onReloadChannels = {
                     scope.launch {
@@ -1999,7 +2037,7 @@ fun LiveStreamingScreen(
                     currentMultiScreenMode = newMode
                     if (newMode != MultiScreenMode.SINGLE && newMode != oldMode) {
                         // Pengguna diwajibkan memilih channel masing-masing layar secara mandiri
-                        multiScreenChannels = listOf(null, null, null, null, null, null)
+                        multiScreenChannels = List(8) { null }
                         activeAudioIndex = 0
                         // Buka otomatis kotak pilihan channel untuk Layar 1
                         pickerTargetScreenIndex = 0
@@ -2722,15 +2760,16 @@ private fun loadStream(channel: IptvChannel?, player: ExoPlayer) {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun PlaylistSettingsBottomSheet(
+private fun PlaylistSettingsDialog(
     iptvRepository: IptvRepository,
     onReloadChannels: () -> Unit,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val configuration = LocalConfiguration.current
+    val dialogWidth75 = (configuration.screenWidthDp * 0.75f).dp
+    val dialogHeight75 = (configuration.screenHeightDp * 0.75f).dp
 
     var playlistSources by remember { mutableStateOf(iptvRepository.getSavedPlaylistSources(context)) }
     var newUrlInput by remember { mutableStateOf("") }
@@ -2778,413 +2817,426 @@ private fun PlaylistSettingsBottomSheet(
         }
     }
 
-    ModalBottomSheet(
+    Dialog(
         onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = MaterialTheme.colorScheme.surface,
-        tonalElevation = 8.dp,
-        modifier = Modifier.testTag("playlist_settings_modal_sheet")
+        properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp)
-                .padding(bottom = 28.dp)
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            Surface(
+                modifier = Modifier
+                    .width(dialogWidth75)
+                    .height(dialogHeight75)
+                    .testTag("playlist_settings_dialog"),
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.surface,
+                border = BorderStroke(1.4.dp, Color(0xFFFFD700)),
+                tonalElevation = 10.dp,
+                shadowElevation = 16.dp
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.Settings,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text(
-                        text = "Pengaturan Playlist IPTV",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                IconButton(
-                    onClick = onDismiss,
-                    modifier = Modifier.testTag("close_playlist_settings")
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Tutup",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            TabRow(selectedTabIndex = selectedTab) {
-                Tab(
-                    selected = selectedTab == 0,
-                    onClick = { selectedTab = 0 },
-                    text = { Text("Daftar Source (${playlistSources.size})", fontWeight = FontWeight.Bold) },
-                    modifier = Modifier.testTag("tab_source_list")
-                )
-                Tab(
-                    selected = selectedTab == 1,
-                    onClick = { selectedTab = 1 },
-                    text = { Text("Tambah Source / File M3U", fontWeight = FontWeight.Bold) },
-                    modifier = Modifier.testTag("tab_add_source")
-                )
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            if (selectedTab == 0) {
-                Text(
-                    text = "Pilih source playlist yang akan dipakai sebagai bahan materi pemilihan channel:",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                LazyColumn(
+                Column(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(240.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                        .fillMaxSize()
+                        .padding(16.dp)
                 ) {
-                    items(playlistSources, key = { it.id }) { source ->
-                        Card(
-                            colors = CardDefaults.cardColors(
-                                containerColor = if (source.isEnabled) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-                                else MaterialTheme.colorScheme.surfaceVariant
-                            ),
-                            shape = RoundedCornerShape(12.dp),
-                            border = BorderStroke(
-                                1.dp,
-                                if (source.isEnabled) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
-                                else MaterialTheme.colorScheme.outlineVariant
-                            ),
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Settings,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = "Pengaturan Playlist IPTV",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        IconButton(
+                            onClick = onDismiss,
+                            modifier = Modifier.testTag("close_playlist_settings")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Tutup",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    TabRow(selectedTabIndex = selectedTab) {
+                        Tab(
+                            selected = selectedTab == 0,
+                            onClick = { selectedTab = 0 },
+                            text = { Text("Daftar Source (${playlistSources.size})", fontWeight = FontWeight.Bold) },
+                            modifier = Modifier.testTag("tab_source_list")
+                        )
+                        Tab(
+                            selected = selectedTab == 1,
+                            onClick = { selectedTab = 1 },
+                            text = { Text("Tambah Source / File M3U", fontWeight = FontWeight.Bold) },
+                            modifier = Modifier.testTag("tab_add_source")
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    if (selectedTab == 0) {
+                        Text(
+                            text = "Pilih source playlist yang akan dipakai sebagai bahan materi pemilihan channel:",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        LazyColumn(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .testTag("source_card_${source.id}")
+                                .weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Row(
-                                modifier = Modifier
-                                    .padding(horizontal = 12.dp, vertical = 8.dp)
-                                    .fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.weight(1f)
+                            items(playlistSources, key = { it.id }) { source ->
+                                Card(
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = if (source.isEnabled) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                                        else MaterialTheme.colorScheme.surfaceVariant
+                                    ),
+                                    shape = RoundedCornerShape(12.dp),
+                                    border = BorderStroke(
+                                        1.dp,
+                                        if (source.isEnabled) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                                        else MaterialTheme.colorScheme.outlineVariant
+                                    ),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .testTag("source_card_${source.id}")
                                 ) {
-                                    Icon(
-                                        imageVector = when (source.type) {
-                                            PlaylistSourceType.URL -> Icons.Default.Link
-                                            PlaylistSourceType.LOCAL_FILE -> Icons.Default.FolderOpen
-                                            PlaylistSourceType.CUSTOM_TEXT -> Icons.Default.EditNote
-                                        },
-                                        contentDescription = null,
-                                        tint = if (source.isEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(22.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(10.dp))
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = source.name,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            fontWeight = FontWeight.Bold,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                        Text(
-                                            text = when (source.type) {
-                                                PlaylistSourceType.URL -> source.urlOrContent
-                                                PlaylistSourceType.LOCAL_FILE -> "File lokal dari perangkat"
-                                                PlaylistSourceType.CUSTOM_TEXT -> "Teks M3U Manual"
-                                            },
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
+                                    Row(
+                                        modifier = Modifier
+                                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                                            .fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Icon(
+                                                imageVector = when (source.type) {
+                                                    PlaylistSourceType.URL -> Icons.Default.Link
+                                                    PlaylistSourceType.LOCAL_FILE -> Icons.Default.FolderOpen
+                                                    PlaylistSourceType.CUSTOM_TEXT -> Icons.Default.EditNote
+                                                },
+                                                contentDescription = null,
+                                                tint = if (source.isEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(22.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(10.dp))
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(
+                                                    text = source.name,
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    fontWeight = FontWeight.Bold,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                                Text(
+                                                    text = when (source.type) {
+                                                        PlaylistSourceType.URL -> source.urlOrContent
+                                                        PlaylistSourceType.LOCAL_FILE -> "File lokal dari perangkat"
+                                                        PlaylistSourceType.CUSTOM_TEXT -> "Teks M3U Manual"
+                                                    },
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                            }
+                                        }
+
+                                        Spacer(modifier = Modifier.width(8.dp))
+
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            // Toggle Switch untuk Dipakai / Tidak Dipakai
+                                            Column(
+                                                horizontalAlignment = Alignment.CenterHorizontally,
+                                                modifier = Modifier.padding(end = 4.dp)
+                                            ) {
+                                                Text(
+                                                    text = if (source.isEnabled) "Dipakai" else "Tidak",
+                                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = if (source.isEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                                                )
+                                                Switch(
+                                                    checked = source.isEnabled,
+                                                    onCheckedChange = { isChecked ->
+                                                        iptvRepository.togglePlaylistSourceEnabled(context, source.id, isChecked)
+                                                        playlistSources = iptvRepository.getSavedPlaylistSources(context)
+                                                    },
+                                                    modifier = Modifier
+                                                        .size(width = 38.dp, height = 24.dp)
+                                                        .testTag("toggle_source_${source.id}")
+                                                )
+                                            }
+
+                                            IconButton(
+                                                onClick = {
+                                                    iptvRepository.removePlaylistSource(context, source.id)
+                                                    playlistSources = iptvRepository.getSavedPlaylistSources(context)
+                                                },
+                                                modifier = Modifier.testTag("delete_source_${source.id}")
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Delete,
+                                                    contentDescription = "Hapus Source",
+                                                    tint = MaterialTheme.colorScheme.error,
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                            }
+                                        }
                                     }
                                 }
+                            }
+                        }
 
-                                Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
 
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    // Toggle Switch untuk Dipakai / Tidak Dipakai
-                                    Column(
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        modifier = Modifier.padding(end = 4.dp)
-                                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Button(
+                                onClick = {
+                                    val preset1 = PlaylistSource(
+                                        id = "preset_adult_1_${System.currentTimeMillis()}",
+                                        name = "Adult IPTV Source 1",
+                                        urlOrContent = "https://raw.githubusercontent.com/atsushi444/iptv/refs/heads/main/adult.m3u",
+                                        type = PlaylistSourceType.URL,
+                                        isEnabled = true
+                                    )
+                                    iptvRepository.addPlaylistSource(context, preset1)
+                                    playlistSources = iptvRepository.getSavedPlaylistSources(context)
+                                },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Text("+ Adult 1", color = MaterialTheme.colorScheme.onSecondaryContainer, style = MaterialTheme.typography.labelSmall)
+                            }
+
+                            Button(
+                                onClick = {
+                                    val preset2 = PlaylistSource(
+                                        id = "preset_adult_2_${System.currentTimeMillis()}",
+                                        name = "Adult IPTV Source 2",
+                                        urlOrContent = "https://raw.githubusercontent.com/atsushi444/iptv/refs/heads/main/adult2.m3u",
+                                        type = PlaylistSourceType.URL,
+                                        isEnabled = true
+                                    )
+                                    iptvRepository.addPlaylistSource(context, preset2)
+                                    playlistSources = iptvRepository.getSavedPlaylistSources(context)
+                                },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Text("+ Adult 2", color = MaterialTheme.colorScheme.onSecondaryContainer, style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            item {
+                                // 1. Pilih File M3U dari Device Storage
+                                Card(
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                                    shape = RoundedCornerShape(14.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(modifier = Modifier.padding(12.dp)) {
                                         Text(
-                                            text = if (source.isEnabled) "Dipakai" else "Tidak",
-                                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
-                                            fontWeight = FontWeight.Bold,
-                                            color = if (source.isEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                                            text = "1. Impor File M3U dari Perangkat",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Bold
                                         )
-                                        Switch(
-                                            checked = source.isEnabled,
-                                            onCheckedChange = { isChecked ->
-                                                iptvRepository.togglePlaylistSourceEnabled(context, source.id, isChecked)
-                                                playlistSources = iptvRepository.getSavedPlaylistSources(context)
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            text = "Pilih file .m3u / .m3u8 / .txt yang tersimpan di memori perangkat HP/Tablet Anda.",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Button(
+                                            onClick = {
+                                                m3uFilePickerLauncher.launch("*/*")
                                             },
                                             modifier = Modifier
-                                                .size(width = 38.dp, height = 24.dp)
-                                                .testTag("toggle_source_${source.id}")
-                                        )
-                                    }
-
-                                    IconButton(
-                                        onClick = {
-                                            iptvRepository.removePlaylistSource(context, source.id)
-                                            playlistSources = iptvRepository.getSavedPlaylistSources(context)
-                                        },
-                                        modifier = Modifier.testTag("delete_source_${source.id}")
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Delete,
-                                            contentDescription = "Hapus Source",
-                                            tint = MaterialTheme.colorScheme.error,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Button(
-                        onClick = {
-                            val preset1 = PlaylistSource(
-                                id = "preset_adult_1_${System.currentTimeMillis()}",
-                                name = "Adult IPTV Source 1",
-                                urlOrContent = "https://raw.githubusercontent.com/atsushi444/iptv/refs/heads/main/adult.m3u",
-                                type = PlaylistSourceType.URL,
-                                isEnabled = true
-                            )
-                            iptvRepository.addPlaylistSource(context, preset1)
-                            playlistSources = iptvRepository.getSavedPlaylistSources(context)
-                        },
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Text("+ Adult 1", color = MaterialTheme.colorScheme.onSecondaryContainer, style = MaterialTheme.typography.labelSmall)
-                    }
-
-                    Button(
-                        onClick = {
-                            val preset2 = PlaylistSource(
-                                id = "preset_adult_2_${System.currentTimeMillis()}",
-                                name = "Adult IPTV Source 2",
-                                urlOrContent = "https://raw.githubusercontent.com/atsushi444/iptv/refs/heads/main/adult2.m3u",
-                                type = PlaylistSourceType.URL,
-                                isEnabled = true
-                            )
-                            iptvRepository.addPlaylistSource(context, preset2)
-                            playlistSources = iptvRepository.getSavedPlaylistSources(context)
-                        },
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Text("+ Adult 2", color = MaterialTheme.colorScheme.onSecondaryContainer, style = MaterialTheme.typography.labelSmall)
-                    }
-                }
-            } else {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(280.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    item {
-                        // 1. Pilih File M3U dari Device Storage
-                        Card(
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                            shape = RoundedCornerShape(14.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(modifier = Modifier.padding(14.dp)) {
-                                Text(
-                                    text = "1. Impor File M3U dari Perangkat",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = "Pilih file .m3u / .m3u8 / .txt yang tersimpan di memori perangkat HP/Tablet Anda.",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Spacer(modifier = Modifier.height(10.dp))
-                                Button(
-                                    onClick = {
-                                        m3uFilePickerLauncher.launch("*/*")
-                                    },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .testTag("pick_m3u_file_button"),
-                                    shape = RoundedCornerShape(10.dp)
-                                ) {
-                                    Icon(imageVector = Icons.Default.UploadFile, contentDescription = null, modifier = Modifier.size(18.dp))
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Pilih File M3U dari Perangkat", fontWeight = FontWeight.Bold)
-                                }
-                            }
-                        }
-                    }
-
-                    item {
-                        // 2. URL Playlist Baru
-                        Card(
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                            shape = RoundedCornerShape(14.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(modifier = Modifier.padding(14.dp)) {
-                                Text(
-                                    text = "2. Tambah URL Source M3U",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    OutlinedTextField(
-                                        value = newUrlInput,
-                                        onValueChange = { newUrlInput = it },
-                                        placeholder = { Text("https://example.com/playlist.m3u") },
-                                        modifier = Modifier.weight(1f),
-                                        singleLine = true,
-                                        shape = RoundedCornerShape(10.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Button(
-                                        onClick = {
-                                            if (newUrlInput.isNotBlank()) {
-                                                val src = PlaylistSource(
-                                                    id = "url_${System.currentTimeMillis()}",
-                                                    name = "URL ${newUrlInput.takeLast(20)}",
-                                                    urlOrContent = newUrlInput.trim(),
-                                                    type = PlaylistSourceType.URL,
-                                                    isEnabled = true
-                                                )
-                                                iptvRepository.addPlaylistSource(context, src)
-                                                playlistSources = iptvRepository.getSavedPlaylistSources(context)
-                                                newUrlInput = ""
-                                                Toast.makeText(context, "URL berhasil ditambahkan", Toast.LENGTH_SHORT).show()
-                                            }
-                                        },
-                                        shape = RoundedCornerShape(10.dp)
-                                    ) {
-                                        Icon(imageVector = Icons.Default.Add, contentDescription = "Tambah")
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    item {
-                        // 3. Teks M3U Manual
-                        Card(
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                            shape = RoundedCornerShape(14.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(modifier = Modifier.padding(14.dp)) {
-                                Text(
-                                    text = "3. Tempel Teks M3U Manual",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                OutlinedTextField(
-                                    value = newCustomText,
-                                    onValueChange = { newCustomText = it },
-                                    placeholder = { Text("#EXTM3U\n#EXTINF:-1 group-title=\"Live\", Nama Channel\nhttp://.../stream.m3u8") },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(110.dp),
-                                    shape = RoundedCornerShape(10.dp)
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Button(
-                                    onClick = {
-                                        if (newCustomText.isNotBlank()) {
-                                            val src = PlaylistSource(
-                                                id = "custom_text_${System.currentTimeMillis()}",
-                                                name = "Teks M3U Manual",
-                                                urlOrContent = newCustomText,
-                                                type = PlaylistSourceType.CUSTOM_TEXT,
-                                                isEnabled = true
-                                            )
-                                            iptvRepository.addPlaylistSource(context, src)
-                                            playlistSources = iptvRepository.getSavedPlaylistSources(context)
-                                            newCustomText = ""
-                                            Toast.makeText(context, "Teks M3U berhasil disimpan", Toast.LENGTH_SHORT).show()
+                                                .fillMaxWidth()
+                                                .testTag("pick_m3u_file_button"),
+                                            shape = RoundedCornerShape(10.dp)
+                                        ) {
+                                            Icon(imageVector = Icons.Default.UploadFile, contentDescription = null, modifier = Modifier.size(18.dp))
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text("Pilih File M3U dari Perangkat", fontWeight = FontWeight.Bold)
                                         }
-                                    },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(10.dp)
+                                    }
+                                }
+                            }
+
+                            item {
+                                // 2. URL Playlist Baru
+                                Card(
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                                    shape = RoundedCornerShape(14.dp),
+                                    modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    Text("Simpan Teks M3U", fontWeight = FontWeight.Bold)
+                                    Column(modifier = Modifier.padding(12.dp)) {
+                                        Text(
+                                            text = "2. Tambah URL Source M3U",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            OutlinedTextField(
+                                                value = newUrlInput,
+                                                onValueChange = { newUrlInput = it },
+                                                placeholder = { Text("https://example.com/playlist.m3u") },
+                                                modifier = Modifier.weight(1f),
+                                                singleLine = true,
+                                                shape = RoundedCornerShape(10.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Button(
+                                                onClick = {
+                                                    if (newUrlInput.isNotBlank()) {
+                                                        val src = PlaylistSource(
+                                                            id = "url_${System.currentTimeMillis()}",
+                                                            name = "URL ${newUrlInput.takeLast(20)}",
+                                                            urlOrContent = newUrlInput.trim(),
+                                                            type = PlaylistSourceType.URL,
+                                                            isEnabled = true
+                                                        )
+                                                        iptvRepository.addPlaylistSource(context, src)
+                                                        playlistSources = iptvRepository.getSavedPlaylistSources(context)
+                                                        newUrlInput = ""
+                                                        Toast.makeText(context, "URL berhasil ditambahkan", Toast.LENGTH_SHORT).show()
+                                                    }
+                                                },
+                                                shape = RoundedCornerShape(10.dp)
+                                            ) {
+                                                Icon(imageVector = Icons.Default.Add, contentDescription = "Tambah")
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            item {
+                                // 3. Teks M3U Manual
+                                Card(
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                                    shape = RoundedCornerShape(14.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(modifier = Modifier.padding(12.dp)) {
+                                        Text(
+                                            text = "3. Tempel Teks M3U Manual",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        OutlinedTextField(
+                                            value = newCustomText,
+                                            onValueChange = { newCustomText = it },
+                                            placeholder = { Text("#EXTM3U\n#EXTINF:-1 group-title=\"Live\", Nama Channel\nhttp://.../stream.m3u8") },
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(100.dp),
+                                            shape = RoundedCornerShape(10.dp)
+                                        )
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        Button(
+                                            onClick = {
+                                                if (newCustomText.isNotBlank()) {
+                                                    val src = PlaylistSource(
+                                                        id = "custom_text_${System.currentTimeMillis()}",
+                                                        name = "Teks M3U Manual",
+                                                        urlOrContent = newCustomText,
+                                                        type = PlaylistSourceType.CUSTOM_TEXT,
+                                                        isEnabled = true
+                                                    )
+                                                    iptvRepository.addPlaylistSource(context, src)
+                                                    playlistSources = iptvRepository.getSavedPlaylistSources(context)
+                                                    newCustomText = ""
+                                                    Toast.makeText(context, "Teks M3U berhasil disimpan", Toast.LENGTH_SHORT).show()
+                                                }
+                                            },
+                                            modifier = Modifier.fillMaxWidth(),
+                                            shape = RoundedCornerShape(10.dp)
+                                        ) {
+                                            Text("Simpan Teks M3U", fontWeight = FontWeight.Bold)
+                                        }
+                                    }
                                 }
                             }
                         }
                     }
-                }
-            }
 
-            Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                TextButton(
-                    onClick = {
-                        iptvRepository.resetPlaylists(context)
-                        playlistSources = iptvRepository.getSavedPlaylistSources(context)
-                        newUrlInput = ""
-                        newCustomText = ""
-                        Toast.makeText(context, "Playlist direset ke default", Toast.LENGTH_SHORT).show()
-                    },
-                    modifier = Modifier.testTag("reset_playlist_button")
-                ) {
-                    Icon(imageVector = Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Reset Default")
-                }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TextButton(
+                            onClick = {
+                                iptvRepository.resetPlaylists(context)
+                                playlistSources = iptvRepository.getSavedPlaylistSources(context)
+                                newUrlInput = ""
+                                newCustomText = ""
+                                Toast.makeText(context, "Playlist direset ke default", Toast.LENGTH_SHORT).show()
+                            },
+                            modifier = Modifier.testTag("reset_playlist_button")
+                        ) {
+                            Icon(imageVector = Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Reset Default")
+                        }
 
-                Button(
-                    onClick = {
-                        onReloadChannels()
-                        onDismiss()
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.testTag("apply_and_reload_button")
-                ) {
-                    Icon(imageVector = Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Terapkan & Reload", fontWeight = FontWeight.Bold)
+                        Button(
+                            onClick = {
+                                onReloadChannels()
+                                onDismiss()
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.testTag("apply_and_reload_button")
+                        ) {
+                            Icon(imageVector = Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Terapkan & Reload", fontWeight = FontWeight.Bold)
+                        }
+                    }
                 }
             }
         }
@@ -3194,13 +3246,14 @@ private fun PlaylistSettingsBottomSheet(
 @Composable
 private fun UniformTopBarButton(
     icon: ImageVector,
-    label: String,
+    contentDescription: String,
     onClick: () -> Unit,
     isSelected: Boolean = false,
     testTag: String = "",
     themeGoldAccent: Color,
     themeTextColor: Color,
-    isDark: Boolean = true
+    isDark: Boolean = true,
+    badgeText: String? = null
 ) {
     Surface(
         onClick = onClick,
@@ -3211,28 +3264,28 @@ private fun UniformTopBarButton(
             if (isSelected) themeGoldAccent else themeGoldAccent.copy(alpha = 0.45f)
         ),
         modifier = Modifier
-            .height(34.dp)
+            .size(34.dp)
             .testTag(testTag)
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(5.dp)
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.fillMaxSize()
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = label,
-                tint = if (isSelected) themeGoldAccent else themeGoldAccent.copy(alpha = 0.95f),
-                modifier = Modifier.size(15.dp)
-            )
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                color = if (isSelected) themeGoldAccent else themeTextColor,
-                maxLines = 1
-            )
+            if (!badgeText.isNullOrBlank()) {
+                Text(
+                    text = badgeText,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isSelected) themeGoldAccent else themeTextColor
+                )
+            } else {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = contentDescription,
+                    tint = if (isSelected) themeGoldAccent else themeGoldAccent.copy(alpha = 0.95f),
+                    modifier = Modifier.size(17.dp)
+                )
+            }
         }
     }
 }

@@ -20,9 +20,10 @@ import com.example.data.IptvChannel
 
 enum class MultiScreenMode(val title: String, val subtitle: String, val count: Int) {
     SINGLE("1 Layar", "Layar Tunggal", 1),
-    DUAL("2 Layar", "Atas (Layar 1) & Bawah (Layar 2)", 2),
-    QUAD("4 Layar", "Grid 2x2: Layar 1, 2, 3, 4", 4),
-    HEXA("6 Layar", "Grid 6 Layar (2x3): Layar 1 - 6", 6)
+    DUAL("2 Layar", "Grid 2 Baris: Layar 1 & 2", 2),
+    QUAD("4 Layar", "Grid 2 Kolom x 2 Baris: Layar 1 - 4", 4),
+    HEXA("6 Layar", "Grid 2 Kolom x 3 Baris: Layar 1 - 6", 6),
+    OCTA("8 Layar", "Grid 4 Baris x 2 Kolom: Layar 1 - 8", 8)
 }
 
 @OptIn(UnstableApi::class)

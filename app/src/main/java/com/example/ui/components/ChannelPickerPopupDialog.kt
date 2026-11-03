@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -113,30 +114,33 @@ fun ChannelPickerPopupDialog(
     val configuration = LocalConfiguration.current
     val screenHeightDp = configuration.screenHeightDp
     val screenWidthDp = configuration.screenWidthDp
-    val isLandscape = screenWidthDp > screenHeightDp
 
-    // Ukuran pop up khususnya tinggi dibuat lebih tinggi (86% dari tinggi layar) dan disesuaikan dengan spek perangkat
-    val dialogHeight = (screenHeightDp * 0.86f).dp
-    val dialogWidth = if (isLandscape) (screenWidthDp * 0.88f).dp else (screenWidthDp * 0.94f).dp
+    // Ukuran pop up disesuaikan dengan spek perangkat: 75% dari lebar dan tinggi device asli, di tengah-tengah
+    val dialogHeight = (screenHeightDp * 0.75f).dp
+    val dialogWidth = (screenWidthDp * 0.75f).dp
 
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        Surface(
-            shape = RoundedCornerShape(20.dp),
-            color = bgColor,
-            border = BorderStroke(
-                1.5.dp,
-                Brush.horizontalGradient(listOf(goldSoft, goldAccent, goldSoft))
-            ),
-            tonalElevation = 10.dp,
-            shadowElevation = 16.dp,
-            modifier = Modifier
-                .width(dialogWidth)
-                .height(dialogHeight)
-                .testTag("channel_picker_popup_dialog")
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
         ) {
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = bgColor,
+                border = BorderStroke(
+                    1.5.dp,
+                    Brush.horizontalGradient(listOf(goldSoft, goldAccent, goldSoft))
+                ),
+                tonalElevation = 10.dp,
+                shadowElevation = 16.dp,
+                modifier = Modifier
+                    .width(dialogWidth)
+                    .height(dialogHeight)
+                    .testTag("channel_picker_popup_dialog")
+            ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -406,4 +410,5 @@ fun ChannelPickerPopupDialog(
             }
         }
     }
+}
 }

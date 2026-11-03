@@ -38,7 +38,7 @@ import androidx.compose.material.icons.filled.Coffee
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
@@ -213,7 +213,7 @@ fun ReaderScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                imageVector = Icons.Default.MenuBook,
+                                imageVector = Icons.AutoMirrored.Filled.MenuBook,
                                 contentDescription = "Koleksi Cerita",
                                 tint = theme.accentColor,
                                 modifier = Modifier.size(16.dp)
@@ -707,7 +707,7 @@ private fun UnreadCollectionSheet(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        imageVector = Icons.Default.MenuBook,
+                        imageVector = Icons.AutoMirrored.Filled.MenuBook,
                         contentDescription = null,
                         tint = theme.accentColor,
                         modifier = Modifier.size(22.dp)

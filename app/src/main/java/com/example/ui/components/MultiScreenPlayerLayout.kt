@@ -13,12 +13,14 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -27,8 +29,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.VolumeOff
-import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -295,22 +297,17 @@ fun MultiScreenPlayerLayout(
                 }
             }
             MultiScreenMode.HEXA -> {
-                // Mode 6 Layar:
-                // Pada landscape: 2 baris x 3 kolom (Layar 1-3 atas, Layar 4-6 bawah)
-                // Pada portrait: 3 baris x 2 kolom (Layar 1-2 atas, Layar 3-4 tengah, Layar 5-6 bawah)
-                val configuration = LocalConfiguration.current
-                val isLandscape = configuration.screenWidthDp > configuration.screenHeightDp
-
-                if (isLandscape) {
-                    Column(modifier = Modifier.fillMaxSize()) {
-                        // Baris Atas: Layar 1, 2, 3
+                // Mode 6 Layar: Grid 2 Kolom dan 3 Baris (Baris 1: Layar 1-2, Baris 2: Layar 3-4, Baris 3: Layar 5-6)
+                Column(modifier = Modifier.fillMaxSize()) {
+                    for (row in 0..2) {
+                        val startIdx = row * 2
                         Row(
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxWidth()
                         ) {
-                            for (col in 0..2) {
-                                val sIndex = col
+                            for (col in 0..1) {
+                                val sIndex = startIdx + col
                                 Box(
                                     modifier = Modifier
                                         .weight(1f)
@@ -331,7 +328,7 @@ fun MultiScreenPlayerLayout(
                                         modifier = Modifier.fillMaxSize()
                                     )
                                 }
-                                if (col < 2) {
+                                if (col == 0) {
                                     Box(
                                         modifier = Modifier
                                             .width(2.dp)
@@ -345,120 +342,78 @@ fun MultiScreenPlayerLayout(
                                 }
                             }
                         }
-
-                        // Divider horizontal tengah
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(2.dp)
-                                .background(
-                                    Brush.horizontalGradient(
-                                        listOf(Color(0x33FFD700), Color(0xFFFFD700), Color(0x33FFD700))
+                        if (row < 2) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(2.dp)
+                                    .background(
+                                        Brush.horizontalGradient(
+                                            listOf(Color(0x33FFD700), Color(0xFFFFD700), Color(0x33FFD700))
+                                        )
                                     )
-                                )
-                        )
-
-                        // Baris Bawah: Layar 4, 5, 6
-                        Row(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxWidth()
-                        ) {
-                            for (col in 3..5) {
-                                val sIndex = col
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .fillMaxHeight()
-                                ) {
-                                    SingleMultiScreenPane(
-                                        screenIndex = sIndex,
-                                        screenTitle = "Layar ${sIndex + 1}",
-                                        channel = screenChannels.getOrNull(sIndex),
-                                        isAudioActive = (activeAudioIndex == sIndex),
-                                        volumeLevel = volumeLevel,
-                                        onSelectAudio = { onSelectAudioIndex(sIndex) },
-                                        onRequestChannelPicker = { onRequestChannelPicker(sIndex) },
-                                        onPreviousChannel = { onPreviousChannel(sIndex) },
-                                        onNextChannel = { onNextChannel(sIndex) },
-                                        onToggleControls = onToggleControls,
-                                        aspectRatioMode = aspectRatioMode,
-                                        modifier = Modifier.fillMaxSize()
-                                    )
-                                }
-                                if (col < 5) {
-                                    Box(
-                                        modifier = Modifier
-                                            .width(2.dp)
-                                            .fillMaxHeight()
-                                            .background(
-                                                Brush.verticalGradient(
-                                                    listOf(Color(0x33FFD700), Color(0xFFFFD700), Color(0x33FFD700))
-                                                )
-                                            )
-                                    )
-                                }
-                            }
+                            )
                         }
                     }
-                } else {
-                    // Portrait: 3 baris x 2 kolom
-                    Column(modifier = Modifier.fillMaxSize()) {
-                        for (row in 0..2) {
-                            val startIdx = row * 2
-                            Row(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .fillMaxWidth()
-                            ) {
-                                for (col in 0..1) {
-                                    val sIndex = startIdx + col
-                                    Box(
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .fillMaxHeight()
-                                    ) {
-                                        SingleMultiScreenPane(
-                                            screenIndex = sIndex,
-                                            screenTitle = "Layar ${sIndex + 1}",
-                                            channel = screenChannels.getOrNull(sIndex),
-                                            isAudioActive = (activeAudioIndex == sIndex),
-                                            volumeLevel = volumeLevel,
-                                            onSelectAudio = { onSelectAudioIndex(sIndex) },
-                                            onRequestChannelPicker = { onRequestChannelPicker(sIndex) },
-                                            onPreviousChannel = { onPreviousChannel(sIndex) },
-                                            onNextChannel = { onNextChannel(sIndex) },
-                                            onToggleControls = onToggleControls,
-                                            aspectRatioMode = aspectRatioMode,
-                                            modifier = Modifier.fillMaxSize()
-                                        )
-                                    }
-                                    if (col == 0) {
-                                        Box(
-                                            modifier = Modifier
-                                                .width(2.dp)
-                                                .fillMaxHeight()
-                                                .background(
-                                                    Brush.verticalGradient(
-                                                        listOf(Color(0x33FFD700), Color(0xFFFFD700), Color(0x33FFD700))
-                                                    )
-                                                )
-                                        )
-                                    }
-                                }
-                            }
-                            if (row < 2) {
+                }
+            }
+            MultiScreenMode.OCTA -> {
+                // Mode 8 Layar: Grid 4 Baris dan 2 Kolom (Baris 1: Layar 1-2, Baris 2: Layar 3-4, Baris 3: Layar 5-6, Baris 4: Layar 7-8)
+                Column(modifier = Modifier.fillMaxSize()) {
+                    for (row in 0..3) {
+                        val startIdx = row * 2
+                        Row(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth()
+                        ) {
+                            for (col in 0..1) {
+                                val sIndex = startIdx + col
                                 Box(
                                     modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(2.dp)
-                                        .background(
-                                            Brush.horizontalGradient(
-                                                listOf(Color(0x33FFD700), Color(0xFFFFD700), Color(0x33FFD700))
+                                        .weight(1f)
+                                        .fillMaxHeight()
+                                ) {
+                                    SingleMultiScreenPane(
+                                        screenIndex = sIndex,
+                                        screenTitle = "Layar ${sIndex + 1}",
+                                        channel = screenChannels.getOrNull(sIndex),
+                                        isAudioActive = (activeAudioIndex == sIndex),
+                                        volumeLevel = volumeLevel,
+                                        onSelectAudio = { onSelectAudioIndex(sIndex) },
+                                        onRequestChannelPicker = { onRequestChannelPicker(sIndex) },
+                                        onPreviousChannel = { onPreviousChannel(sIndex) },
+                                        onNextChannel = { onNextChannel(sIndex) },
+                                        onToggleControls = onToggleControls,
+                                        aspectRatioMode = aspectRatioMode,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                }
+                                if (col == 0) {
+                                    Box(
+                                        modifier = Modifier
+                                            .width(2.dp)
+                                            .fillMaxHeight()
+                                            .background(
+                                                Brush.verticalGradient(
+                                                    listOf(Color(0x33FFD700), Color(0xFFFFD700), Color(0x33FFD700))
+                                                )
                                             )
-                                        )
-                                )
+                                    )
+                                }
                             }
+                        }
+                        if (row < 3) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(2.dp)
+                                    .background(
+                                        Brush.horizontalGradient(
+                                            listOf(Color(0x33FFD700), Color(0xFFFFD700), Color(0x33FFD700))
+                                        )
+                                    )
+                            )
                         }
                     }
                 }
@@ -650,65 +605,54 @@ private fun SingleMultiScreenPane(
             Spacer(modifier = Modifier.width(6.dp))
 
             // Action Buttons: Audio Status & Ganti Channel
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                // Audio Toggle / Indicator
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                // Audio Toggle / Indicator (26x26dp)
                 Surface(
+                    onClick = { onSelectAudio() },
                     shape = RoundedCornerShape(6.dp),
-                    color = if (isAudioActive) goldAccent.copy(alpha = 0.25f) else Color(0xFF1E1F2C).copy(alpha = 0.8f),
+                    color = if (isAudioActive) goldAccent.copy(alpha = 0.28f) else Color(0xFF1E1F2C).copy(alpha = 0.8f),
                     border = BorderStroke(
                         0.8.dp,
                         if (isAudioActive) goldAccent else Color(0xFF4A4D68)
                     ),
                     modifier = Modifier
-                        .clickable { onSelectAudio() }
+                        .size(26.dp)
                         .testTag("audio_toggle_pane_$paneNumber")
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.fillMaxSize()
                     ) {
                         Icon(
-                            imageVector = if (isAudioActive) Icons.Default.VolumeUp else Icons.Default.VolumeOff,
+                            imageVector = if (isAudioActive) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff,
                             contentDescription = if (isAudioActive) "Suara Aktif" else "Bisu",
                             tint = if (isAudioActive) goldAccent else Color.LightGray,
-                            modifier = Modifier.size(13.dp)
-                        )
-                        Spacer(modifier = Modifier.width(3.dp))
-                        Text(
-                            text = if (isAudioActive) "Suara" else "Bisu",
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (isAudioActive) goldAccent else Color.LightGray
+                            modifier = Modifier.size(14.dp)
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.width(5.dp))
-
-                // Tombol "Ganti Channel" (Membuka popup pilihan channel untuk layar ini)
+                // Tombol "Ganti Channel" (26x26dp)
                 Surface(
+                    onClick = { onRequestChannelPicker() },
                     shape = RoundedCornerShape(6.dp),
                     color = goldAccent,
                     modifier = Modifier
-                        .clickable { onRequestChannelPicker() }
+                        .size(26.dp)
                         .testTag("pick_channel_pane_$paneNumber")
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.fillMaxSize()
                     ) {
                         Icon(
                             imageVector = Icons.Default.LiveTv,
-                            contentDescription = "Pilih Channel",
+                            contentDescription = "Pilih / Ganti Channel",
                             tint = Color.Black,
-                            modifier = Modifier.size(13.dp)
-                        )
-                        Spacer(modifier = Modifier.width(3.dp))
-                        Text(
-                            text = "Ganti",
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.Black
+                            modifier = Modifier.size(14.dp)
                         )
                     }
                 }
@@ -727,49 +671,52 @@ private fun SingleMultiScreenPane(
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
-                    modifier = Modifier.padding(14.dp)
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.LiveTv,
                         contentDescription = null,
                         tint = goldAccent,
-                        modifier = Modifier.size(38.dp)
+                        modifier = Modifier.size(26.dp)
                     )
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = "Layar $paneNumber: Belum Ada Siaran",
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = MaterialTheme.typography.bodySmall,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
                     )
-                    Spacer(modifier = Modifier.height(3.dp))
+                    Spacer(modifier = Modifier.height(1.dp))
                     Text(
-                        text = "Wajib memilih siaran untuk menonton di layar ini",
-                        style = MaterialTheme.typography.labelSmall,
+                        text = "Wajib memilih siaran",
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
                         color = Color.LightGray,
                         textAlign = TextAlign.Center
                     )
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
                     Button(
                         onClick = onRequestChannelPicker,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = goldAccent,
                             contentColor = Color.Black
                         ),
-                        shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier.testTag("empty_state_pick_channel_button_$paneNumber")
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier
+                            .heightIn(min = 28.dp)
+                            .testTag("empty_state_pick_channel_button_$paneNumber")
                     ) {
                         Icon(
                             imageVector = Icons.Default.LiveTv,
                             contentDescription = null,
                             tint = Color.Black,
-                            modifier = Modifier.size(15.dp)
+                            modifier = Modifier.size(13.dp)
                         )
-                        Spacer(modifier = Modifier.width(6.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = "Pilih Channel Layar $paneNumber",
+                            text = "Pilih Siaran Layar $paneNumber",
                             fontWeight = FontWeight.Bold,
-                            fontSize = 11.sp
+                            fontSize = 10.sp
                         )
                     }
                 }
