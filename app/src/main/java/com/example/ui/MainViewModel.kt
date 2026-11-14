@@ -26,8 +26,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = StoryRepository.getInstance(application)
     val iptvRepository: IptvRepository = IptvRepository.getInstance(application)
 
-    // Onboarding / Welcome modal state
-    private val _showWelcomeBanner = MutableStateFlow(true)
+    // Onboarding / Welcome modal state (false by default so Live TV opens immediately)
+    private val _showWelcomeBanner = MutableStateFlow(false)
     val showWelcomeBanner: StateFlow<Boolean> = _showWelcomeBanner.asStateFlow()
 
     // Search query

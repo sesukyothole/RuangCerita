@@ -202,24 +202,24 @@ fun MultiScreenModeDialog(
                                         )
                                     }
                                     MultiScreenMode.DUAL -> {
-                                        Column(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                                        Row(
+                                            modifier = Modifier.fillMaxSize(),
+                                            horizontalArrangement = Arrangement.spacedBy(2.dp)
                                         ) {
                                             Box(
                                                 modifier = Modifier
-                                                    .fillMaxWidth()
                                                     .weight(1f)
-                                                    .background(goldAccent.copy(alpha = 0.8f), RoundedCornerShape(2.dp)),
+                                                    .fillMaxHeight()
+                                                    .background(goldAccent.copy(alpha = 0.85f), RoundedCornerShape(2.dp)),
                                                 contentAlignment = Alignment.Center
                                             ) {
                                                 Text("1", fontSize = 8.sp, fontWeight = FontWeight.Bold, color = Color.Black)
                                             }
                                             Box(
                                                 modifier = Modifier
-                                                    .fillMaxWidth()
                                                     .weight(1f)
-                                                    .background(goldAccent.copy(alpha = 0.6f), RoundedCornerShape(2.dp)),
+                                                    .fillMaxHeight()
+                                                    .background(goldAccent.copy(alpha = 0.65f), RoundedCornerShape(2.dp)),
                                                 contentAlignment = Alignment.Center
                                             ) {
                                                 Text("2", fontSize = 8.sp, fontWeight = FontWeight.Bold, color = Color.Black)

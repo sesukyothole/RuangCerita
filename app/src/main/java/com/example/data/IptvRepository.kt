@@ -34,6 +34,7 @@ class IptvRepository private constructor() {
     companion object {
         const val PREFS_NAME = "iptv_preferences"
         const val KEY_PLAYLIST_SOURCES_V3 = "playlist_sources_v3"
+        private const val KEY_MAIN_SOURCES_SEEDED = "main_adult_sources_seeded_v1"
         private const val CACHE_FILE_NAME = "iptv_channels_cache.json"
 
         @Volatile
@@ -49,15 +50,15 @@ class IptvRepository private constructor() {
 
         val DEFAULT_PLAYLIST_SOURCES = listOf(
             PlaylistSource(
-                id = "default_adult_1",
-                name = "Adult IPTV Source 1",
+                id = "main_source_adult_1",
+                name = "Playlist Utama 1",
                 urlOrContent = "https://raw.githubusercontent.com/atsushi444/iptv/refs/heads/main/adult.m3u",
                 type = PlaylistSourceType.URL,
                 isEnabled = true
             ),
             PlaylistSource(
-                id = "default_adult_2",
-                name = "Adult IPTV Source 2",
+                id = "main_source_adult_2",
+                name = "Playlist Utama 2",
                 urlOrContent = "https://raw.githubusercontent.com/atsushi444/iptv/refs/heads/main/adult2.m3u",
                 type = PlaylistSourceType.URL,
                 isEnabled = true
@@ -174,108 +175,78 @@ class IptvRepository private constructor() {
     }
 
     /**
-     * Default starter channels agar layar Live TV langsung memiliki siaran aktif
+     * Default starter channels (kosong sampai sumber playlist utama selesai diambil)
      */
     fun getPreloadedDefaultChannels(): List<IptvChannel> {
-        return listOf(
-            IptvChannel(
-                id = "preloaded_ch_1",
-                name = "驚豔台 (Amazing TV)",
-                genre = "PRIVADO",
-                logoUrl = "https://raw.githubusercontent.com/atsushi444/iptv/main/logo/amazing_tv.png",
-                streamUrl = "http://15.204.105.50:25461/G2s9zK2n9m/xDtwVfWM8T/85"
-            ),
-            IptvChannel(
-                id = "preloaded_ch_2",
-                name = "潘朵啦玩美台 (Pandora Perfect)",
-                genre = "PRIVADO",
-                logoUrl = "https://raw.githubusercontent.com/atsushi444/iptv/main/logo/pandora_perfect.png",
-                streamUrl = "http://15.204.105.50:25461/G2s9zK2n9m/xDtwVfWM8T/86"
-            ),
-            IptvChannel(
-                id = "preloaded_ch_3",
-                name = "惊艳台",
-                genre = "PRIVADO",
-                logoUrl = "",
-                streamUrl = "http://15.204.105.50:25461/G2s9zK2n9m/xDtwVfWM8T/87"
-            ),
-            IptvChannel(
-                id = "preloaded_ch_4",
-                name = "松視1台 (SonSee 1)",
-                genre = "PRIVADO",
-                logoUrl = "https://raw.githubusercontent.com/atsushi444/iptv/main/logo/sonsee1.png",
-                streamUrl = "http://15.204.105.50:25461/G2s9zK2n9m/xDtwVfWM8T/88"
-            ),
-            IptvChannel(
-                id = "preloaded_ch_5",
-                name = "松視2台 (SonSee 2)",
-                genre = "PRIVADO",
-                logoUrl = "https://raw.githubusercontent.com/atsushi444/iptv/main/logo/SonSee2.png",
-                streamUrl = "http://15.204.105.50:25461/G2s9zK2n9m/xDtwVfWM8T/89"
-            ),
-            IptvChannel(
-                id = "preloaded_ch_6",
-                name = "松視3台 (SonSee 3)",
-                genre = "PRIVADO",
-                logoUrl = "https://raw.githubusercontent.com/atsushi444/iptv/main/logo/sonsee3.png",
-                streamUrl = "http://15.204.105.50:25461/G2s9zK2n9m/xDtwVfWM8T/90"
-            ),
-            IptvChannel(
-                id = "preloaded_ch_7",
-                name = "松視4台 (SonSee 4)",
-                genre = "PRIVADO",
-                logoUrl = "https://raw.githubusercontent.com/atsushi444/iptv/main/logo/sonsee4.png",
-                streamUrl = "http://15.204.105.50:25461/G2s9zK2n9m/xDtwVfWM8T/91"
-            ),
-            IptvChannel(
-                id = "preloaded_ch_8",
-                name = "彩虹電影台",
-                genre = "PRIVADO",
-                logoUrl = "https://raw.githubusercontent.com/atsushi444/iptv/main/logo/Rainbow%20Movie.png",
-                streamUrl = "http://15.204.105.50:25461/G2s9zK2n9m/xDtwVfWM8T/92"
-            )
-        )
+        return emptyList()
     }
 
     fun getSavedPlaylistSources(context: Context): List<PlaylistSource> {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val jsonString = prefs.getString(KEY_PLAYLIST_SOURCES_V3, null)
-        if (!jsonString.isNullOrBlank()) {
-            val list = deserializeSources(jsonString)
-            if (list.isNotEmpty()) return list
-        }
-
-        // Migrate from legacy URL list if present
-        val legacyUrls = getLegacyPlaylistUrls(context)
-        val migratedList = mutableListOf<PlaylistSource>()
-        for ((idx, url) in legacyUrls.withIndex()) {
-            migratedList.add(
-                PlaylistSource(
-                    id = "url_${idx}_${url.hashCode()}",
-                    name = "URL Source ${idx + 1}",
-                    urlOrContent = url,
-                    type = PlaylistSourceType.URL,
-                    isEnabled = true
+        val existingList = if (!jsonString.isNullOrBlank()) {
+            deserializeSources(jsonString)
+        } else {
+            val legacyUrls = getLegacyPlaylistUrls(context)
+            val migratedList = mutableListOf<PlaylistSource>()
+            for ((idx, url) in legacyUrls.withIndex()) {
+                migratedList.add(
+                    PlaylistSource(
+                        id = "url_${idx}_${url.hashCode()}",
+                        name = "Playlist ${idx + 1}",
+                        urlOrContent = url,
+                        type = PlaylistSourceType.URL,
+                        isEnabled = true
+                    )
                 )
-            )
-        }
+            }
 
-        val customText = prefs.getString("custom_m3u_text", null)
-        if (!customText.isNullOrBlank()) {
-            migratedList.add(
-                PlaylistSource(
-                    id = "custom_text_legacy",
-                    name = "Teks M3U Manual",
-                    urlOrContent = customText,
-                    type = PlaylistSourceType.CUSTOM_TEXT,
-                    isEnabled = true
+            val customText = prefs.getString("custom_m3u_text", null)
+            if (!customText.isNullOrBlank()) {
+                migratedList.add(
+                    PlaylistSource(
+                        id = "custom_text_legacy",
+                        name = "Playlist ${migratedList.size + 1}",
+                        urlOrContent = customText,
+                        type = PlaylistSourceType.CUSTOM_TEXT,
+                        isEnabled = true
+                    )
                 )
-            )
+            }
+            migratedList
         }
 
-        val initialList = if (migratedList.isNotEmpty()) migratedList else DEFAULT_PLAYLIST_SOURCES
-        savePlaylistSources(context, initialList)
-        return initialList
+        val hasSeededMainSources = prefs.getBoolean(KEY_MAIN_SOURCES_SEEDED, false)
+        if (!hasSeededMainSources) {
+            val primaryKeys = DEFAULT_PLAYLIST_SOURCES
+                .map { it.urlOrContent.trim() to it.type }
+                .toSet()
+            val remainingSources = existingList.filterNot { src ->
+                (src.urlOrContent.trim() to src.type) in primaryKeys
+            }
+            val mergedList = DEFAULT_PLAYLIST_SOURCES + remainingSources
+            savePlaylistSources(context, mergedList)
+            prefs.edit().putBoolean(KEY_MAIN_SOURCES_SEEDED, true).apply()
+            return mergedList
+        }
+
+        if (jsonString.isNullOrBlank()) {
+            savePlaylistSources(context, existingList)
+        }
+        return existingList
+    }
+
+    /**
+     * Otomatis membuat penamaan playlist baru secara berurutan: Playlist 1, Playlist 2, dst.
+     */
+    fun generateNextPlaylistName(context: Context, customSuffix: String? = null): String {
+        val current = getSavedPlaylistSources(context)
+        val nextIndex = current.size + 1
+        return if (!customSuffix.isNullOrBlank()) {
+            "Playlist $nextIndex - $customSuffix"
+        } else {
+            "Playlist $nextIndex"
+        }
     }
 
     fun savePlaylistSources(context: Context, sources: List<PlaylistSource>) {
@@ -313,8 +284,14 @@ class IptvRepository private constructor() {
             .remove("playlist_urls_v2")
             .remove("playlist_urls")
             .remove("custom_m3u_text")
+            .putBoolean(KEY_MAIN_SOURCES_SEEDED, true)
             .apply()
         savePlaylistSources(context, DEFAULT_PLAYLIST_SOURCES)
+        try {
+            val file = File(context.filesDir, CACHE_FILE_NAME)
+            if (file.exists()) file.delete()
+        } catch (_: Exception) {}
+        _channelsFlow.value = emptyList()
     }
 
     private fun getLegacyPlaylistUrls(context: Context): List<String> {
@@ -366,6 +343,11 @@ class IptvRepository private constructor() {
 
         val sources = getSavedPlaylistSources(context)
         val enabledSources = sources.filter { it.isEnabled }
+        if (sources.isEmpty() || enabledSources.isEmpty()) {
+            _channelsFlow.value = emptyList()
+            saveChannelsToFile(context, emptyList())
+            return@withContext emptyList()
+        }
 
         val results = coroutineScope {
             enabledSources.map { source ->

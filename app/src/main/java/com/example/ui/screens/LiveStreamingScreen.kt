@@ -13,6 +13,7 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import android.view.WindowManager
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import kotlin.OptIn
@@ -233,7 +234,7 @@ fun LiveStreamingScreen(
     var streamError by remember { mutableStateOf<String?>(null) }
 
     var isFullScreen by remember { mutableStateOf(false) }
-    var showControlsInFullScreen by remember { mutableStateOf(true) }
+    var showControlsInFullScreen by remember { mutableStateOf(false) }
 
     var lastClickedChannelId by remember { mutableStateOf<String?>(null) }
     var lastClickTimestamp by remember { mutableStateOf(0L) }
@@ -249,11 +250,11 @@ fun LiveStreamingScreen(
     var showPlaylistSettingsSheet by remember { mutableStateOf(false) }
     var showAudioVolumeDialog by remember { mutableStateOf(false) }
     var showThemeDialog by remember { mutableStateOf(false) }
-    var showOrientationDialog by remember { mutableStateOf(false) }
     var showSortDialog by remember { mutableStateOf(false) }
     var showMultiScreenDialog by remember { mutableStateOf(false) }
     var showAspectRatioDialog by remember { mutableStateOf(false) }
     var currentAspectRatioMode by remember { mutableStateOf(VideoAspectRatioMode.FIT) }
+    var hasUserSelectedAspectRatio by remember { mutableStateOf(false) }
     var currentMultiScreenMode by remember { mutableStateOf(MultiScreenMode.SINGLE) }
     var multiScreenChannels by remember { mutableStateOf<List<IptvChannel?>>(List(8) { null }) }
     var activeAudioIndex by remember { mutableStateOf(0) }
@@ -279,34 +280,37 @@ fun LiveStreamingScreen(
     }
 
     DisposableEffect(Unit) {
-        // Otomatis paksa ke mode landscape saat masuk ke Live Streaming
+        // Otomatis paksa ke mode landscape secara permanen saat berada di Live Streaming
         applyOrientation(AppOrientationMode.LANDSCAPE)
-        onDispose {
-            // Pulihkan orientasi layar device saat keluar dari Live Streaming
-            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-        }
+        onDispose { }
     }
 
-    // Kontrol dan daftar pilihan channel muncul saat awal dibuka,
-    // dan akan otomatis sembunyi jika pengguna tidak melakukan aktivitas selama 60 detik.
-    // Saat pengguna menyentuh 1x pada layar, pilihan channel dan kontrol otomatis muncul kembali.
-    var areControlsVisible by remember { mutableStateOf(true) }
+    // Semua tombol kontrol otomatis disembunyikan saat awal dibuka.
+    // Saat pengguna menyentuh 1x pada layar, kontrol otomatis muncul kembali dan tetap tampil
+    // sampai pengguna mengakhiri aktivitas (misalnya selesai memilih channel baru) atau tap 1x lagi.
+    var areControlsVisible by remember { mutableStateOf(false) }
     var lastInteractionTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
 
-    // Timer otomatis sembunyi 60 detik tanpa aktivitas pengguna (diperpanjang agar pengguna leluasa)
-    LaunchedEffect(areControlsVisible, lastInteractionTime) {
-        if (areControlsVisible) {
-            delay(60000L)
-            areControlsVisible = false
-            onControlsVisibilityChange(false)
-        }
+    LaunchedEffect(areControlsVisible, isFullScreen, showControlsInFullScreen) {
+        val visible = if (isFullScreen) showControlsInFullScreen else areControlsVisible
+        onControlsVisibilityChange(visible)
     }
 
-    LaunchedEffect(isFullScreen, showControlsInFullScreen, lastInteractionTime) {
-        if (isFullScreen && showControlsInFullScreen) {
-            delay(60000L)
+    val hasAnyPopupOpen = pickerTargetScreenIndex != null ||
+        showPlaylistSettingsSheet ||
+        showMultiScreenDialog ||
+        showAspectRatioDialog ||
+        showAudioVolumeDialog ||
+        showSortDialog ||
+        showThemeDialog
+
+    BackHandler(enabled = (areControlsVisible || (isFullScreen && showControlsInFullScreen)) && !hasAnyPopupOpen) {
+        if (isFullScreen) {
             showControlsInFullScreen = false
+        } else {
+            areControlsVisible = false
         }
+        onControlsVisibilityChange(false)
     }
 
     val toggleControlsVisibility: () -> Unit = {
@@ -321,10 +325,6 @@ fun LiveStreamingScreen(
     }
 
     val recordUserInteraction: () -> Unit = {
-        if (!areControlsVisible) {
-            areControlsVisible = true
-            onControlsVisibilityChange(true)
-        }
         lastInteractionTime = System.currentTimeMillis()
     }
 
@@ -825,24 +825,6 @@ fun LiveStreamingScreen(
                         isDark = isDark
                     )
 
-                    // 6. Orientasi Layar
-                    UniformTopBarButton(
-                        icon = when (currentOrientationMode) {
-                            AppOrientationMode.AUTO -> Icons.Default.ScreenRotation
-                            AppOrientationMode.PORTRAIT -> Icons.Default.StayCurrentPortrait
-                            AppOrientationMode.LANDSCAPE -> Icons.Default.StayCurrentLandscape
-                        },
-                        contentDescription = "Orientasi Layar (${currentOrientationMode.title})",
-                        onClick = {
-                            recordUserInteraction()
-                            showOrientationDialog = true
-                        },
-                        testTag = "orientation_selector_button",
-                        themeGoldAccent = themeGoldAccent,
-                        themeTextColor = themeTextColor,
-                        isDark = isDark
-                    )
-
                     // 7. Urutan Channel
                     UniformTopBarButton(
                         icon = when (currentSortMode) {
@@ -942,83 +924,74 @@ fun LiveStreamingScreen(
             .background(themeBgColor)
             .testTag("live_streaming_screen")
     ) {
+        val effectiveMultiScreenAspectRatio = if (hasUserSelectedAspectRatio) currentAspectRatioMode else VideoAspectRatioMode.FILL
+
         if (currentMultiScreenMode != MultiScreenMode.SINGLE) {
             // MODE MULTI LAYAR (2, 4, 6, 8 LAYAR):
-            // Judul dan kontrol dibuat FIX TETAP MUNCUL di bagian atas,
-            // dan bagian live multi layar ditempatkan tepat di bawah kontrol.
-            Column(
+            // Full screen menyesuaikan masing-masing bagian layar dengan kontrol overlay auto-hide.
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(Color.Black)
             ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .statusBarsPadding()
-                        .padding(start = 10.dp, top = 6.dp, end = 10.dp, bottom = 4.dp)
-                ) {
-                    topWatchingBarContent()
-                }
+                MultiScreenPlayerLayout(
+                    mode = currentMultiScreenMode,
+                    screenChannels = multiScreenChannels,
+                    activeAudioIndex = activeAudioIndex,
+                    volumeLevel = volumeLevel,
+                    showControls = if (isFullScreen) showControlsInFullScreen else areControlsVisible,
+                    onSelectAudioIndex = { index ->
+                        activeAudioIndex = index
+                        recordUserInteraction()
+                        Toast.makeText(context, "🔊 Audio Aktif: Layar ${index + 1}", Toast.LENGTH_SHORT).show()
+                    },
+                    onRequestChannelPicker = { index ->
+                        pickerTargetScreenIndex = index
+                        recordUserInteraction()
+                    },
+                    onPreviousChannel = { index ->
+                        goToPreviousChannelForScreen(index)
+                    },
+                    onNextChannel = { index ->
+                        goToNextChannelForScreen(index)
+                    },
+                    onToggleControls = {
+                        if (isFullScreen) {
+                            showControlsInFullScreen = !showControlsInFullScreen
+                            lastInteractionTime = System.currentTimeMillis()
+                        } else {
+                            toggleControlsVisibility()
+                        }
+                    },
+                    aspectRatioMode = effectiveMultiScreenAspectRatio,
+                    modifier = Modifier.fillMaxSize()
+                )
 
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .background(Color.Black)
-                ) {
-                    MultiScreenPlayerLayout(
-                        mode = currentMultiScreenMode,
-                        screenChannels = multiScreenChannels,
-                        activeAudioIndex = activeAudioIndex,
-                        volumeLevel = volumeLevel,
-                        onSelectAudioIndex = { index ->
-                            activeAudioIndex = index
-                            recordUserInteraction()
-                            Toast.makeText(context, "🔊 Audio Aktif: Layar ${index + 1}", Toast.LENGTH_SHORT).show()
-                        },
-                        onRequestChannelPicker = { index ->
-                            pickerTargetScreenIndex = index
-                            recordUserInteraction()
-                        },
-                        onPreviousChannel = { index ->
-                            goToPreviousChannelForScreen(index)
-                        },
-                        onNextChannel = { index ->
-                            goToNextChannelForScreen(index)
-                        },
-                        onToggleControls = {
-                            // Kontrol bar sudah fix di atas pada mode multi-layar
-                        },
-                        aspectRatioMode = currentAspectRatioMode,
-                        modifier = Modifier.fillMaxSize()
-                    )
-
-                    // Global Buffering indicator during channel repository fetch
-                    if (isLoadingChannels) {
-                        Surface(
-                            color = Color.Black.copy(alpha = 0.85f),
-                            shape = RoundedCornerShape(16.dp),
-                            modifier = Modifier
-                                .align(Alignment.Center)
-                                .padding(16.dp)
+                // Global Buffering indicator during channel repository fetch
+                if (isLoadingChannels) {
+                    Surface(
+                        color = Color.Black.copy(alpha = 0.85f),
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .padding(16.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                CircularProgressIndicator(
-                                    color = Color(0xFFFFD700),
-                                    strokeWidth = 3.dp,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Text(
-                                    text = "Mengambil siaran IPTV...",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
-                                )
-                            }
+                            CircularProgressIndicator(
+                                color = Color(0xFFFFD700),
+                                strokeWidth = 3.dp,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                text = "Mengambil siaran IPTV...",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
                         }
                     }
                 }
@@ -1096,20 +1069,20 @@ fun LiveStreamingScreen(
                     }
                 }
             }
+        }
 
-            // ATAS BAGIAN JUDUL APLIKASI, SEMUA KONTROL LENGKAP DALAM 1 BARIS SERAGAM, DAN TOMBOL CLOSE
-            AnimatedVisibility(
-                visible = if (isFullScreen) showControlsInFullScreen else areControlsVisible,
-                enter = fadeIn() + slideInVertically(initialOffsetY = { -it }),
-                exit = fadeOut() + slideOutVertically(targetOffsetY = { -it }),
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .fillMaxWidth()
-                    .statusBarsPadding()
-                    .padding(start = 10.dp, top = 6.dp, end = 10.dp)
-            ) {
-                topWatchingBarContent()
-            }
+        // ATAS BAGIAN JUDUL APLIKASI, SEMUA KONTROL LENGKAP DALAM 1 BARIS SERAGAM, DAN TOMBOL CLOSE
+        AnimatedVisibility(
+            visible = if (isFullScreen) showControlsInFullScreen else areControlsVisible,
+            enter = fadeIn() + slideInVertically(initialOffsetY = { -it }),
+            exit = fadeOut() + slideOutVertically(targetOffsetY = { -it }),
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .padding(start = 10.dp, top = 6.dp, end = 10.dp)
+        ) {
+            topWatchingBarContent()
         }
 
     // Floating Minimalist Luxury Controls Overlay in FULL SCREEN MODE (Toggle on tap)
@@ -1184,36 +1157,6 @@ fun LiveStreamingScreen(
                             }
                         }
 
-                        // Orientation Mode Selector in Fullscreen
-                        Surface(
-                            onClick = {
-                                recordUserInteraction()
-                                showOrientationDialog = true
-                            },
-                            shape = RoundedCornerShape(10.dp),
-                            color = Color(0xFF1E202B),
-                            border = BorderStroke(1.dp, Color(0xFFFFD700).copy(alpha = 0.8f)),
-                            modifier = Modifier
-                                .size(34.dp)
-                                .testTag("fullscreen_orientation_button")
-                        ) {
-                            Box(
-                                contentAlignment = Alignment.Center,
-                                modifier = Modifier.fillMaxSize()
-                            ) {
-                                Icon(
-                                    imageVector = when (currentOrientationMode) {
-                                        AppOrientationMode.AUTO -> Icons.Default.ScreenRotation
-                                        AppOrientationMode.PORTRAIT -> Icons.Default.StayCurrentPortrait
-                                        AppOrientationMode.LANDSCAPE -> Icons.Default.StayCurrentLandscape
-                                    },
-                                    contentDescription = "Mode Orientasi",
-                                    tint = Color(0xFFFFD700),
-                                    modifier = Modifier.size(17.dp)
-                                )
-                            }
-                        }
-
                         // Channel Sort Selector in Fullscreen
                         Surface(
                             onClick = {
@@ -1241,167 +1184,6 @@ fun LiveStreamingScreen(
                                     tint = Color(0xFFFFD700),
                                     modifier = Modifier.size(17.dp)
                                 )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Dialog Pemilihan Mode Orientasi Layar (Portait / Landscape / Automatic)
-        if (showOrientationDialog) {
-            Dialog(
-                onDismissRequest = {
-                    recordUserInteraction()
-                    showOrientationDialog = false
-                },
-                properties = DialogProperties(usePlatformDefaultWidth = false)
-            ) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Surface(
-                        modifier = Modifier
-                            .width(dialogWidth75)
-                            .height(dialogHeight75)
-                            .testTag("orientation_selection_dialog"),
-                        shape = RoundedCornerShape(20.dp),
-                        color = themeControlBarBg,
-                        border = BorderStroke(1.4.dp, themeGoldAccent),
-                        tonalElevation = 10.dp,
-                        shadowElevation = 16.dp
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(16.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        imageVector = Icons.Default.ScreenRotation,
-                                        contentDescription = null,
-                                        tint = themeGoldAccent,
-                                        modifier = Modifier.size(22.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(10.dp))
-                                    Text(
-                                        text = "Pilih Mode Layar",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = themeTextColor
-                                    )
-                                }
-                                IconButton(onClick = {
-                                    recordUserInteraction()
-                                    showOrientationDialog = false
-                                }) {
-                                    Icon(
-                                        imageVector = Icons.Default.Close,
-                                        contentDescription = "Tutup",
-                                        tint = themeTextSecondary
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(10.dp))
-
-                            // 3 Orientation Options (Scrollable)
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .weight(1f)
-                                    .verticalScroll(rememberScrollState()),
-                                verticalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                listOf(
-                                    Triple(AppOrientationMode.PORTRAIT, Icons.Default.StayCurrentPortrait, "Mode Portait"),
-                                    Triple(AppOrientationMode.LANDSCAPE, Icons.Default.StayCurrentLandscape, "Mode Landscape"),
-                                    Triple(AppOrientationMode.AUTO, Icons.Default.ScreenRotation, "Automatic (Sesuai Device)")
-                                ).forEach { (mode, icon, label) ->
-                                    val isSelected = currentOrientationMode == mode
-                                    Card(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clip(RoundedCornerShape(14.dp))
-                                            .clickable {
-                                                applyOrientation(mode)
-                                                recordUserInteraction()
-                                                showOrientationDialog = false
-                                            }
-                                            .testTag("orientation_option_${mode.name.lowercase()}"),
-                                        colors = CardDefaults.cardColors(
-                                            containerColor = if (isSelected) {
-                                                if (isDark) Color(0xFF332912) else Color(0xFFFFF6DF)
-                                            } else {
-                                                if (isDark) Color(0xFF1B1C28) else Color(0xFFF3F5FA)
-                                            }
-                                        ),
-                                        border = if (isSelected) BorderStroke(1.5.dp, themeGoldAccent)
-                                                 else BorderStroke(0.6.dp, if (isDark) Color(0xFF33354A) else Color(0xFFD6DBE6))
-                                    ) {
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(horizontal = 14.dp, vertical = 12.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.SpaceBetween
-                                        ) {
-                                            Row(
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                modifier = Modifier.weight(1f)
-                                            ) {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .size(36.dp)
-                                                        .clip(CircleShape)
-                                                    .background(
-                                                        if (isSelected) themeGoldAccent.copy(alpha = 0.2f)
-                                                        else if (isDark) Color(0xFF252636) else Color(0xFFE2E6F0)
-                                                    ),
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    Icon(
-                                                        imageVector = icon,
-                                                        contentDescription = null,
-                                                        tint = if (isSelected) themeGoldAccent else themeTextSecondary,
-                                                        modifier = Modifier.size(20.dp)
-                                                    )
-                                                }
-
-                                                Spacer(modifier = Modifier.width(12.dp))
-
-                                                Column {
-                                                    Text(
-                                                        text = label,
-                                                        style = MaterialTheme.typography.bodyMedium,
-                                                        fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Bold,
-                                                        color = if (isSelected) themeGoldAccent else themeTextColor
-                                                    )
-                                                    Text(
-                                                        text = mode.subtitle,
-                                                        style = MaterialTheme.typography.labelSmall,
-                                                        color = themeTextSecondary
-                                                    )
-                                                }
-                                            }
-
-                                            if (isSelected) {
-                                                Icon(
-                                                    imageVector = Icons.Default.Check,
-                                                    contentDescription = "Dipilih",
-                                                    tint = themeGoldAccent,
-                                                    modifier = Modifier.size(20.dp)
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
                             }
                         }
                     }
@@ -1479,14 +1261,20 @@ fun LiveStreamingScreen(
                                     .verticalScroll(rememberScrollState()),
                                 verticalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
+                                val activeDisplayAspectRatio = if (currentMultiScreenMode != MultiScreenMode.SINGLE && !hasUserSelectedAspectRatio) {
+                                    VideoAspectRatioMode.FILL
+                                } else {
+                                    currentAspectRatioMode
+                                }
                                 VideoAspectRatioMode.values().forEach { mode ->
-                                    val isSelected = currentAspectRatioMode == mode
+                                    val isSelected = activeDisplayAspectRatio == mode
                                     Card(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .clip(RoundedCornerShape(14.dp))
                                             .clickable {
                                                 currentAspectRatioMode = mode
+                                                hasUserSelectedAspectRatio = true
                                                 recordUserInteraction()
                                                 showAspectRatioDialog = false
                                                 Toast.makeText(context, "Mode Resolusi: ${mode.title}", Toast.LENGTH_SHORT).show()
@@ -2009,25 +1797,6 @@ fun LiveStreamingScreen(
             }
         }
 
-        // Playlist Settings Dialog
-        if (showPlaylistSettingsSheet) {
-            PlaylistSettingsDialog(
-                iptvRepository = iptvRepository,
-                onReloadChannels = {
-                    scope.launch {
-                        isLoadingChannels = true
-                        val newChannels = iptvRepository.fetchChannels(context)
-                        channels = newChannels
-                        if (newChannels.isNotEmpty()) {
-                            currentChannel = newChannels.firstOrNull()
-                        }
-                        isLoadingChannels = false
-                    }
-                },
-                onDismiss = { showPlaylistSettingsSheet = false }
-            )
-        }
-
         // Dialog Pemilihan Mode Multi Layar (1 Layar, 2 Layar, 4 Layar)
         if (showMultiScreenDialog) {
             MultiScreenModeDialog(
@@ -2041,6 +1810,10 @@ fun LiveStreamingScreen(
                         activeAudioIndex = 0
                         // Buka otomatis kotak pilihan channel untuk Layar 1
                         pickerTargetScreenIndex = 0
+                    } else if (newMode == MultiScreenMode.SINGLE) {
+                        areControlsVisible = false
+                        showControlsInFullScreen = false
+                        onControlsVisibilityChange(false)
                     }
                     recordUserInteraction()
                     Toast.makeText(
@@ -2058,12 +1831,28 @@ fun LiveStreamingScreen(
         // Kotak Pop Up Pemilihan Channel untuk Setiap Layar
         if (pickerTargetScreenIndex != null) {
             val targetIdx = pickerTargetScreenIndex!!
+            val currentChannelForTarget = if (currentMultiScreenMode == MultiScreenMode.SINGLE) {
+                currentChannel
+            } else {
+                multiScreenChannels.getOrNull(targetIdx)
+            }
             ChannelPickerPopupDialog(
-                targetScreenName = "Layar ${targetIdx + 1}",
-                currentChannelId = multiScreenChannels.getOrNull(targetIdx)?.id,
-                channels = sortedChannels,
+                targetScreenName = if (currentMultiScreenMode == MultiScreenMode.SINGLE) "Layar Utama" else "Layar ${targetIdx + 1}",
+                currentChannelId = currentChannelForTarget?.id,
+                channels = channels,
                 favoriteChannelIds = favoriteChannelIds,
+                initialSortMode = currentSortMode,
+                onSortModeChanged = { newSortMode ->
+                    currentSortMode = newSortMode
+                    iptvRepository.saveSortMode(context, newSortMode)
+                    recordUserInteraction()
+                },
+                onOpenPlaylistSettings = {
+                    recordUserInteraction()
+                    showPlaylistSettingsSheet = true
+                },
                 onSelectChannel = { selectedChannel ->
+                    val isNewChannelChosen = currentChannelForTarget == null || selectedChannel.id != currentChannelForTarget.id
                     val updated = multiScreenChannels.toMutableList()
                     while (updated.size <= targetIdx) {
                         updated.add(null)
@@ -2074,20 +1863,50 @@ fun LiveStreamingScreen(
                         currentChannel = selectedChannel
                     }
                     val nextEmptyIdx = (0 until currentMultiScreenMode.count).firstOrNull { idx ->
-                        idx != targetIdx && multiScreenChannels.getOrNull(idx) == null
+                        idx != targetIdx && updated.getOrNull(idx) == null
                     }
                     recordUserInteraction()
                     Toast.makeText(context, "Layar ${targetIdx + 1} memutar: ${selectedChannel.name}", Toast.LENGTH_SHORT).show()
 
-                    // Otomatis pandu pengguna memilih channel untuk layar berikutnya yang masih kosong
+                    // Otomatis pandu pengguna memilih channel untuk layar berikutnya yang masih kosong.
+                    // Jangan sembunyikan kontrol jika pengguna belum memilih channel baru atau masih ada layar kosong.
                     if (nextEmptyIdx != null) {
                         pickerTargetScreenIndex = nextEmptyIdx
                     } else {
                         pickerTargetScreenIndex = null
+                        if (isNewChannelChosen) {
+                            areControlsVisible = false
+                            showControlsInFullScreen = false
+                            onControlsVisibilityChange(false)
+                        }
                     }
                 },
-                onDismiss = { pickerTargetScreenIndex = null },
+                onDismiss = {
+                    // Jangan sembunyikan kontrol jika pengguna menutup tanpa memilih channel baru
+                    pickerTargetScreenIndex = null
+                },
                 isDark = isDark
+            )
+        }
+
+        // Playlist Settings Dialog
+        if (showPlaylistSettingsSheet) {
+            PlaylistSettingsDialog(
+                iptvRepository = iptvRepository,
+                onReloadChannels = {
+                    scope.launch {
+                        isLoadingChannels = true
+                        val newChannels = iptvRepository.fetchChannels(context)
+                        channels = newChannels
+                        if (newChannels.isNotEmpty()) {
+                            currentChannel = newChannels.find {
+                                it.id == currentChannel?.id || it.name.equals(currentChannel?.name, ignoreCase = true)
+                            } ?: newChannels.firstOrNull()
+                        }
+                        isLoadingChannels = false
+                    }
+                },
+                onDismiss = { showPlaylistSettingsSheet = false }
             )
         }
     }
@@ -2155,6 +1974,10 @@ private fun SingleLivePlayerView(
         AndroidView(
             factory = { ctx ->
                 PlayerView(ctx).apply {
+                    layoutParams = android.view.ViewGroup.LayoutParams(
+                        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                        android.view.ViewGroup.LayoutParams.MATCH_PARENT
+                    )
                     this.player = player
                     useController = false
                     resizeMode = aspectRatioMode.resizeMode
@@ -2264,96 +2087,102 @@ private fun SingleLivePlayerView(
             )
         }
 
-        // Judul Channel Biasa (Tanpa Kotak Warna) & Petunjuk Ketuk 2x
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp)
-                .align(Alignment.TopStart),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
+        // Judul Channel & Tombol Favorit & Petunjuk Ketuk 2x - otomatis sembunyi saat kontrol disembunyikan
+        if (showControls) {
             Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(start = 12.dp, top = 58.dp, end = 12.dp, bottom = 8.dp)
+                    .align(Alignment.TopStart),
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.weight(1f, fill = false)
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                if (channel != null) {
-                    if (!channel.logoUrl.isNullOrEmpty()) {
-                        AsyncImage(
-                            model = channel.logoUrl,
-                            contentDescription = channel.name,
-                            contentScale = ContentScale.Fit,
-                            error = painterResource(id = R.drawable.img_app_icon_1784738562791),
-                            fallback = painterResource(id = R.drawable.img_app_icon_1784738562791),
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    if (channel != null) {
+                        if (!channel.logoUrl.isNullOrEmpty()) {
+                            AsyncImage(
+                                model = channel.logoUrl,
+                                contentDescription = channel.name,
+                                contentScale = ContentScale.Fit,
+                                error = painterResource(id = R.drawable.img_app_icon_1784738562791),
+                                fallback = painterResource(id = R.drawable.img_app_icon_1784738562791),
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .clip(RoundedCornerShape(3.dp))
+                            )
+                        } else {
+                            Image(
+                                painter = painterResource(id = R.drawable.img_app_icon_1784738562791),
+                                contentDescription = channel.name,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .clip(RoundedCornerShape(3.dp))
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
+                    Text(
+                        text = channel?.name ?: "Pilih Siaran Channel",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    if (channel != null && (channel.isMpd || channel.streamUrl.lowercase().contains(".mpd"))) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Surface(
+                            color = Color(0xDD332912),
+                            border = BorderStroke(0.8.dp, Color(0xFFFFD700)),
+                            shape = RoundedCornerShape(4.dp)
+                        ) {
+                            Text(
+                                text = "MPD/DASH",
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 7.5.sp),
+                                color = Color(0xFFFFD700),
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                            )
+                        }
+                    }
+                    if (channel != null) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        IconButton(
+                            onClick = { onToggleFavorite() },
                             modifier = Modifier
-                                .size(20.dp)
-                                .clip(RoundedCornerShape(3.dp))
-                        )
-                    } else {
-                        Image(
-                            painter = painterResource(id = R.drawable.img_app_icon_1784738562791),
-                            contentDescription = channel.name,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier
-                                .size(20.dp)
-                                .clip(RoundedCornerShape(3.dp))
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                }
-                Text(
-                    text = channel?.name ?: "Pilih Siaran Channel",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
-                    color = Color.White,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                if (channel != null && (channel.isMpd || channel.streamUrl.lowercase().contains(".mpd"))) {
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Surface(
-                        color = Color(0xDD332912),
-                        border = BorderStroke(0.8.dp, Color(0xFFFFD700)),
-                        shape = RoundedCornerShape(4.dp)
-                    ) {
-                        Text(
-                            text = "MPD/DASH",
-                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 7.5.sp),
-                            color = Color(0xFFFFD700),
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
-                        )
+                                .size(28.dp)
+                                .testTag("player_favorite_toggle_button")
+                        ) {
+                            Icon(
+                                imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                contentDescription = "Favoritkan Channel",
+                                tint = if (isFavorite) Color(0xFFFF4757) else Color.White,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
                     }
                 }
-                if (channel != null) {
-                    Spacer(modifier = Modifier.width(6.dp))
-                    IconButton(
-                        onClick = { onToggleFavorite() },
-                        modifier = Modifier
-                            .size(28.dp)
-                            .testTag("player_favorite_toggle_button")
-                    ) {
-                        Icon(
-                            imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                            contentDescription = "Favoritkan Channel",
-                            tint = if (isFavorite) Color(0xFFFF4757) else Color.White,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                }
-            }
 
-            if (showControls) {
+                Spacer(modifier = Modifier.width(8.dp))
+
                 Surface(
                     color = Color.Black.copy(alpha = 0.65f),
                     shape = RoundedCornerShape(8.dp),
                     border = BorderStroke(0.6.dp, Color(0xFFFFD700).copy(alpha = 0.6f))
                 ) {
                     Text(
-                        text = "Ketuk 2x Tengah: Pop Up Channel | Kanan/Kiri Atas: ❮ Prev | Kanan/Kiri Bawah: Next ❯",
+                        text = "Ketuk 2x Tengah: Channel • Atas/Bawah: ❮/❯",
                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.5.sp),
                         color = Color(0xFFFFD700),
                         fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
                     )
                 }
@@ -2363,7 +2192,9 @@ private fun SingleLivePlayerView(
         // Center prompt if no channel selected
         if (channel == null) {
             Card(
-                modifier = Modifier.padding(16.dp),
+                modifier = Modifier
+                    .padding(16.dp)
+                    .clickable { onOpenChannelPicker() },
                 colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.85f)),
                 border = BorderStroke(1.dp, Color(0xFFFFD700))
             ) {
@@ -2379,7 +2210,7 @@ private fun SingleLivePlayerView(
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "Silakan pilih siaran channel di bawah",
+                        text = "Ketuk untuk memilih siaran channel",
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Bold,
                         color = Color.White

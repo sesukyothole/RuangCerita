@@ -1,6 +1,7 @@
 package com.example
 
 import android.app.Activity
+import android.content.pm.ActivityInfo
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -14,14 +15,17 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -41,9 +45,11 @@ import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
@@ -148,8 +154,8 @@ fun RuangCeritaApp(viewModel: MainViewModel) {
         com.example.data.AppThemeMode.DARK -> true
     }
 
-    var selectedBottomTab by remember { mutableIntStateOf(0) }
-    var isLiveTvControlsVisible by remember { mutableStateOf(true) }
+    var selectedBottomTab by remember { mutableIntStateOf(1) }
+    var isLiveTvControlsVisible by remember { mutableStateOf(false) }
     var showGlobalReaderSettingsSheet by remember { mutableStateOf(false) }
     var isAgeVerifiedForDashboard by remember { mutableStateOf(false) }
     var showPinDialogForDashboard by remember { mutableStateOf(false) }
@@ -159,6 +165,60 @@ fun RuangCeritaApp(viewModel: MainViewModel) {
         currentStoryId?.let { id ->
             stories.find { it.id == id } ?: favoriteStories.find { it.id == id }
         }
+    }
+
+    val activity = context as? Activity
+    LaunchedEffect(selectedBottomTab, activeStory, showWelcomeBanner, isAgeVerifiedForDashboard) {
+        if (!isAgeVerifiedForDashboard) {
+            // Mode awal saat membuka aplikasi (layar PIN & Live TV) tetap Landscape permanen
+            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        } else if (activeStory != null || selectedBottomTab == 0) {
+            // Saat pengguna memilih Cerita / membaca cerita, mode perangkat dibuat Portrait secara permanen
+            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        } else {
+            // Mode dashboard / Live TV dibuat Landscape secara permanen
+            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        }
+    }
+
+    // 0. Mandatory PIN Verification Gate on App Launch (Default PIN: 1234)
+    if (!isAgeVerifiedForDashboard) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(if (isDark) Color(0xFF090A10) else Color(0xFFF1F3F8))
+        ) {
+            DashboardPinDialog(
+                isDark = isDark,
+                onDismiss = {
+                    val act = context as? Activity
+                    try {
+                        act?.finishAndRemoveTask()
+                    } catch (_: Exception) {
+                        act?.finishAffinity()
+                    }
+                },
+                onPinCorrect = {
+                    isAgeVerifiedForDashboard = true
+                    showPinDialogForDashboard = false
+                    selectedBottomTab = 1
+                },
+                onOpenAdminChangePin = {
+                    showAdminChangePinDialog = true
+                }
+            )
+
+            if (showAdminChangePinDialog) {
+                AdminChangePinDialog(
+                    isDark = isDark,
+                    onDismiss = { showAdminChangePinDialog = false },
+                    onPinChanged = {
+                        showAdminChangePinDialog = false
+                    }
+                )
+            }
+        }
+        return
     }
 
     // 1. Initial Greeting Overlay Screen ("Ketika aplikasi dibuka muncul ucapan selamat datang...")
@@ -250,6 +310,7 @@ fun RuangCeritaApp(viewModel: MainViewModel) {
 
     // 3. Main Application Dashboard & Navigation Hub
     Scaffold(
+        contentWindowInsets = if (selectedBottomTab == 1) WindowInsets(0, 0, 0, 0) else ScaffoldDefaults.contentWindowInsets,
         bottomBar = {
             AnimatedVisibility(
                 visible = selectedBottomTab != 1 || isLiveTvControlsVisible,
@@ -269,6 +330,7 @@ fun RuangCeritaApp(viewModel: MainViewModel) {
                 shadowElevation = 8.dp,
                 modifier = Modifier
                     .fillMaxWidth()
+                    .navigationBarsPadding()
                     .testTag("main_bottom_navigation")
             ) {
                 Row(
@@ -391,7 +453,12 @@ fun RuangCeritaApp(viewModel: MainViewModel) {
                     // 3. Tombol Close / Keluar Aplikasi (Mewah & Berkesan)
                     Surface(
                         onClick = {
-                            (context as? Activity)?.finish()
+                            val act = context as? Activity
+                            try {
+                                act?.finishAndRemoveTask()
+                            } catch (_: Exception) {
+                                act?.finishAffinity()
+                            }
                         },
                         shape = RoundedCornerShape(10.dp),
                         color = if (isDark) Color(0xFF2B1418) else Color(0xFFFFECEE),

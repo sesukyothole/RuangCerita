@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -52,6 +53,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -125,6 +127,9 @@ fun AdminChangePinDialog(
         }
     }
 
+    val configuration = LocalConfiguration.current
+    val maxDialogHeight = (configuration.screenHeightDp * 0.90f).dp
+
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(
@@ -134,7 +139,7 @@ fun AdminChangePinDialog(
         )
     ) {
         Surface(
-            shape = RoundedCornerShape(24.dp),
+            shape = RoundedCornerShape(22.dp),
             color = dialogBgColor,
             tonalElevation = 12.dp,
             shadowElevation = 16.dp,
@@ -146,14 +151,15 @@ fun AdminChangePinDialog(
                 )
             ),
             modifier = Modifier
-                .widthIn(min = 320.dp, max = 400.dp)
-                .padding(20.dp)
+                .widthIn(min = 320.dp, max = 420.dp)
+                .heightIn(max = maxDialogHeight)
+                .padding(16.dp)
                 .testTag("admin_change_pin_dialog")
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(20.dp)
+                    .padding(18.dp)
                     .verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {

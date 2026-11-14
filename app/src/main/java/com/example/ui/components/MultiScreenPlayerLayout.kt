@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -72,12 +73,13 @@ fun MultiScreenPlayerLayout(
     screenChannels: List<IptvChannel?>,
     activeAudioIndex: Int,
     volumeLevel: Float,
+    showControls: Boolean = false,
     onSelectAudioIndex: (Int) -> Unit,
     onRequestChannelPicker: (Int) -> Unit,
     onPreviousChannel: (Int) -> Unit = {},
     onNextChannel: (Int) -> Unit = {},
     onToggleControls: () -> Unit = {},
-    aspectRatioMode: com.example.ui.screens.VideoAspectRatioMode = com.example.ui.screens.VideoAspectRatioMode.FIT,
+    aspectRatioMode: com.example.ui.screens.VideoAspectRatioMode = com.example.ui.screens.VideoAspectRatioMode.FILL,
     modifier: Modifier = Modifier
 ) {
     Box(
@@ -91,19 +93,20 @@ fun MultiScreenPlayerLayout(
                 // Single screen handled by parent or fallback
             }
             MultiScreenMode.DUAL -> {
-                // Mode 2 Layar: Atas (Layar 1) dan Bawah (Layar 2)
-                Column(modifier = Modifier.fillMaxSize()) {
+                // Mode 2 Layar: Grid 2 Kolom (Kiri = Layar 1, Kanan = Layar 2)
+                Row(modifier = Modifier.fillMaxSize()) {
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .fillMaxWidth()
+                            .fillMaxHeight()
                     ) {
                         SingleMultiScreenPane(
                             screenIndex = 0,
-                            screenTitle = "Layar 1 (Atas)",
+                            screenTitle = "Layar 1 (Kiri)",
                             channel = screenChannels.getOrNull(0),
                             isAudioActive = (activeAudioIndex == 0),
                             volumeLevel = volumeLevel,
+                            showControls = showControls,
                             onSelectAudio = { onSelectAudioIndex(0) },
                             onRequestChannelPicker = { onRequestChannelPicker(0) },
                             onPreviousChannel = { onPreviousChannel(0) },
@@ -114,13 +117,13 @@ fun MultiScreenPlayerLayout(
                         )
                     }
 
-                    // Pembatas tipis emas mewah antar layar
+                    // Pembatas tipis emas mewah antar kolom layar
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .height(2.dp)
+                            .width(2.dp)
+                            .fillMaxHeight()
                             .background(
-                                Brush.horizontalGradient(
+                                Brush.verticalGradient(
                                     listOf(
                                         Color(0x33FFD700),
                                         Color(0xFFFFD700),
@@ -133,14 +136,15 @@ fun MultiScreenPlayerLayout(
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .fillMaxWidth()
+                            .fillMaxHeight()
                     ) {
                         SingleMultiScreenPane(
                             screenIndex = 1,
-                            screenTitle = "Layar 2 (Bawah)",
+                            screenTitle = "Layar 2 (Kanan)",
                             channel = screenChannels.getOrNull(1),
                             isAudioActive = (activeAudioIndex == 1),
                             volumeLevel = volumeLevel,
+                            showControls = showControls,
                             onSelectAudio = { onSelectAudioIndex(1) },
                             onRequestChannelPicker = { onRequestChannelPicker(1) },
                             onPreviousChannel = { onPreviousChannel(1) },
@@ -175,6 +179,7 @@ fun MultiScreenPlayerLayout(
                                 channel = screenChannels.getOrNull(0),
                                 isAudioActive = (activeAudioIndex == 0),
                                 volumeLevel = volumeLevel,
+                                showControls = showControls,
                                 onSelectAudio = { onSelectAudioIndex(0) },
                                 onRequestChannelPicker = { onRequestChannelPicker(0) },
                                 onPreviousChannel = { onPreviousChannel(0) },
@@ -209,6 +214,7 @@ fun MultiScreenPlayerLayout(
                                 channel = screenChannels.getOrNull(1),
                                 isAudioActive = (activeAudioIndex == 1),
                                 volumeLevel = volumeLevel,
+                                showControls = showControls,
                                 onSelectAudio = { onSelectAudioIndex(1) },
                                 onRequestChannelPicker = { onRequestChannelPicker(1) },
                                 onPreviousChannel = { onPreviousChannel(1) },
@@ -250,6 +256,7 @@ fun MultiScreenPlayerLayout(
                                 channel = screenChannels.getOrNull(2),
                                 isAudioActive = (activeAudioIndex == 2),
                                 volumeLevel = volumeLevel,
+                                showControls = showControls,
                                 onSelectAudio = { onSelectAudioIndex(2) },
                                 onRequestChannelPicker = { onRequestChannelPicker(2) },
                                 onPreviousChannel = { onPreviousChannel(2) },
@@ -284,6 +291,7 @@ fun MultiScreenPlayerLayout(
                                 channel = screenChannels.getOrNull(3),
                                 isAudioActive = (activeAudioIndex == 3),
                                 volumeLevel = volumeLevel,
+                                showControls = showControls,
                                 onSelectAudio = { onSelectAudioIndex(3) },
                                 onRequestChannelPicker = { onRequestChannelPicker(3) },
                                 onPreviousChannel = { onPreviousChannel(3) },
@@ -319,6 +327,7 @@ fun MultiScreenPlayerLayout(
                                         channel = screenChannels.getOrNull(sIndex),
                                         isAudioActive = (activeAudioIndex == sIndex),
                                         volumeLevel = volumeLevel,
+                                        showControls = showControls,
                                         onSelectAudio = { onSelectAudioIndex(sIndex) },
                                         onRequestChannelPicker = { onRequestChannelPicker(sIndex) },
                                         onPreviousChannel = { onPreviousChannel(sIndex) },
@@ -380,6 +389,7 @@ fun MultiScreenPlayerLayout(
                                         channel = screenChannels.getOrNull(sIndex),
                                         isAudioActive = (activeAudioIndex == sIndex),
                                         volumeLevel = volumeLevel,
+                                        showControls = showControls,
                                         onSelectAudio = { onSelectAudioIndex(sIndex) },
                                         onRequestChannelPicker = { onRequestChannelPicker(sIndex) },
                                         onPreviousChannel = { onPreviousChannel(sIndex) },
@@ -430,12 +440,13 @@ private fun SingleMultiScreenPane(
     channel: IptvChannel?,
     isAudioActive: Boolean,
     volumeLevel: Float,
+    showControls: Boolean = false,
     onSelectAudio: () -> Unit,
     onRequestChannelPicker: () -> Unit,
     onPreviousChannel: () -> Unit = {},
     onNextChannel: () -> Unit = {},
     onToggleControls: () -> Unit = {},
-    aspectRatioMode: com.example.ui.screens.VideoAspectRatioMode = com.example.ui.screens.VideoAspectRatioMode.FIT,
+    aspectRatioMode: com.example.ui.screens.VideoAspectRatioMode = com.example.ui.screens.VideoAspectRatioMode.FILL,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -500,9 +511,15 @@ private fun SingleMultiScreenPane(
     Box(
         modifier = modifier
             .background(Color.Black)
-            .border(
-                if (isAudioActive) 1.5.dp else 0.5.dp,
-                if (isAudioActive) goldAccent else Color(0xFF2A2B3D)
+            .then(
+                if (showControls) {
+                    Modifier.border(
+                        if (isAudioActive) 1.5.dp else 0.5.dp,
+                        if (isAudioActive) goldAccent else Color(0xFF2A2B3D)
+                    )
+                } else {
+                    Modifier
+                }
             )
             .testTag("multi_screen_pane_$paneNumber")
     ) {
@@ -510,6 +527,10 @@ private fun SingleMultiScreenPane(
         AndroidView(
             factory = { ctx ->
                 PlayerView(ctx).apply {
+                    layoutParams = android.view.ViewGroup.LayoutParams(
+                        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                        android.view.ViewGroup.LayoutParams.MATCH_PARENT
+                    )
                     this.player = player
                     useController = false
                     resizeMode = aspectRatioMode.resizeMode
@@ -521,7 +542,9 @@ private fun SingleMultiScreenPane(
                 if (view.player !== player) {
                     view.player = player
                 }
-                view.resizeMode = aspectRatioMode.resizeMode
+                if (view.resizeMode != aspectRatioMode.resizeMode) {
+                    view.resizeMode = aspectRatioMode.resizeMode
+                }
             },
             onRelease = { view ->
                 view.player = null
@@ -529,14 +552,13 @@ private fun SingleMultiScreenPane(
             modifier = Modifier.fillMaxSize()
         )
 
-        // Touch surface: Single tap switches audio & toggles controls. Double tap center opens popup; double tap top/bottom switches channel.
+        // Touch surface: Single tap toggles controls. Double tap center opens popup; double tap top/bottom switches channel.
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .pointerInput(onSelectAudio, onRequestChannelPicker, onPreviousChannel, onNextChannel) {
+                .pointerInput(onToggleControls, onRequestChannelPicker, onPreviousChannel, onNextChannel) {
                     detectTapGestures(
                         onTap = {
-                            onSelectAudio()
                             onToggleControls()
                         },
                         onDoubleTap = { offset ->
@@ -560,19 +582,97 @@ private fun SingleMultiScreenPane(
                 }
         )
 
-        // Overlay Header (Top Bar of Each Pane)
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    Brush.verticalGradient(
-                        listOf(Color.Black.copy(alpha = 0.85f), Color.Transparent)
+        // Center Placeholder if no channel selected (Wajib memilih siaran)
+        if (channel == null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.78f))
+                    .clickable { onRequestChannelPicker() },
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.LiveTv,
+                        contentDescription = null,
+                        tint = goldAccent,
+                        modifier = Modifier.size(26.dp)
                     )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "Layar $paneNumber: Belum Ada Siaran",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                    Spacer(modifier = Modifier.height(1.dp))
+                    Text(
+                        text = "Wajib memilih siaran",
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                        color = Color.LightGray,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Button(
+                        onClick = onRequestChannelPicker,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = goldAccent,
+                            contentColor = Color.Black
+                        ),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier
+                            .heightIn(min = 28.dp)
+                            .testTag("empty_state_pick_channel_button_$paneNumber")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.LiveTv,
+                            contentDescription = null,
+                            tint = Color.Black,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Pilih Siaran Layar $paneNumber",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 10.sp
+                        )
+                    }
+                }
+            }
+        }
+
+        // Overlay Header (Top Bar of Each Pane) - otomatis sembunyi & muncul saat tap 1x
+        AnimatedVisibility(
+            visible = showControls,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .then(
+                    if (screenIndex < 2) {
+                        Modifier.statusBarsPadding().padding(top = 56.dp)
+                    } else {
+                        Modifier
+                    }
                 )
-                .padding(horizontal = 6.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
         ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(Color.Black.copy(alpha = 0.85f), Color.Transparent)
+                        )
+                    )
+                    .padding(horizontal = 6.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
             // Screen Number Badge & Channel Name
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -658,69 +758,6 @@ private fun SingleMultiScreenPane(
                 }
             }
         }
-
-        // Center Placeholder if no channel selected (Wajib memilih siaran)
-        if (channel == null) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.78f))
-                    .clickable { onRequestChannelPicker() },
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.LiveTv,
-                        contentDescription = null,
-                        tint = goldAccent,
-                        modifier = Modifier.size(26.dp)
-                    )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = "Layar $paneNumber: Belum Ada Siaran",
-                        style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                    Spacer(modifier = Modifier.height(1.dp))
-                    Text(
-                        text = "Wajib memilih siaran",
-                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
-                        color = Color.LightGray,
-                        textAlign = TextAlign.Center
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Button(
-                        onClick = onRequestChannelPicker,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = goldAccent,
-                            contentColor = Color.Black
-                        ),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier
-                            .heightIn(min = 28.dp)
-                            .testTag("empty_state_pick_channel_button_$paneNumber")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.LiveTv,
-                            contentDescription = null,
-                            tint = Color.Black,
-                            modifier = Modifier.size(13.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "Pilih Siaran Layar $paneNumber",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 10.sp
-                        )
-                    }
-                }
-            }
         }
 
         // Buffering Indicator
