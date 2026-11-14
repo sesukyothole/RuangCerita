@@ -31,14 +31,6 @@ class StoryRepository(
         }
     }
 
-    fun getStoriesByGenre(genre: String): Flow<List<StoryEntity>> {
-        return if (genre == "Semua") {
-            storyDao.getAllStories()
-        } else {
-            storyDao.getStoriesByGenre(genre)
-        }
-    }
-
     fun searchStories(query: String): Flow<List<StoryEntity>> {
         return storyDao.searchStories(query)
     }
@@ -57,10 +49,6 @@ class StoryRepository(
 
     suspend fun markStoryAsRead(id: String, isRead: Boolean = true) = withContext(Dispatchers.IO) {
         storyDao.updateReadStatus(id, isRead)
-    }
-
-    suspend fun updateStoryGenre(id: String, newGenre: String) = withContext(Dispatchers.IO) {
-        storyDao.updateStoryGenre(id, newGenre.trim())
     }
 
     suspend fun syncStoriesFromWeb(
@@ -84,12 +72,12 @@ class StoryRepository(
             for (story in fetchedList) {
                 val existing = storyDao.getStoryByIdOnce(story.id)
                 if (existing != null) {
-                    // Retain user's favorite, read position, read status & custom genre
+                    // Retain user's favorite, read position & read status
                     val updated = story.copy(
                         isFavorite = existing.isFavorite,
                         lastReadPosition = existing.lastReadPosition,
                         isRead = existing.isRead,
-                        genre = if (existing.genre.isNotBlank()) existing.genre else story.genre
+                        genre = ""
                     )
                     storyDao.insertStory(updated)
                 } else {

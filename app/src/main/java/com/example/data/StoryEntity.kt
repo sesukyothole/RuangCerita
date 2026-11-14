@@ -9,7 +9,7 @@ data class StoryEntity(
     val id: String,
     val title: String,
     val author: String,
-    val genre: String,
+    val genre: String = "",
     val summary: String,
     val content: String,
     val publishedDate: String,

@@ -670,7 +670,7 @@ private fun UnreadCollectionSheet(
         if (searchQuery.isBlank()) baseList
         else baseList.filter {
             it.title.contains(searchQuery, ignoreCase = true) ||
-                    it.genre.contains(searchQuery, ignoreCase = true)
+                    it.author.contains(searchQuery, ignoreCase = true)
         }
     }
 
@@ -868,7 +868,7 @@ private fun UnreadCollectionSheet(
                                     )
                                     Spacer(modifier = Modifier.height(2.dp))
                                     Text(
-                                        text = "${story.genre} • Oleh ${story.author}",
+                                        text = "Oleh ${story.author} • ${story.publishedDate}",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = theme.textColor.copy(alpha = 0.6f)
                                     )

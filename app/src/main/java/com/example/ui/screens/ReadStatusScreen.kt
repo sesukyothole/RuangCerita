@@ -91,7 +91,6 @@ fun ReadStatusScreen(
             }
             val matchesSearch = searchQuery.isBlank() ||
                     story.title.contains(searchQuery, ignoreCase = true) ||
-                    story.genre.contains(searchQuery, ignoreCase = true) ||
                     story.summary.contains(searchQuery, ignoreCase = true)
 
             matchesFilter && matchesSearch
@@ -302,7 +301,7 @@ fun ReadStatusScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("read_status_search_input"),
-                placeholder = { Text("Cari judul, genre, atau ringkasan cerita...") },
+                placeholder = { Text("Cari judul atau ringkasan cerita...") },
                 leadingIcon = {
                     Icon(
                         imageVector = Icons.Default.Search,

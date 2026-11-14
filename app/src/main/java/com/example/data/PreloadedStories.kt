@@ -1,25 +1,13 @@
 package com.example.data
 
 object PreloadedStories {
-    val GENRES = listOf(
-        "Semua",
-        "Romantis",
-        "Horor",
-        "Komedi",
-        "Fantasi",
-        "Misteri",
-        "Petualangan",
-        "Kehidupan",
-        "Sci-Fi"
-    )
-
     fun getInitialStories(): List<StoryEntity> {
         return listOf(
             StoryEntity(
                 id = "blogger_init_1",
                 title = "Di Sudut Kafe Senja",
                 author = "Ruang Cerita",
-                genre = "Romantis",
+                genre = "",
                 summary = "Pertemuan tak terduga di tengah rintik hujan sore hari membuka kembali lembaran kenangan masa lalu.",
                 content = """
                     Hujan sore itu turun dengan deras di atas atap seng kafe kecil di persimpangan jalan. Aroma kopi tubruk dan tanah basah berpadu, menciptakan suasana tenang yang sudah lama kurindukan. Di meja sudut dekat jendela kaca yang berembun, aku duduk menatap tetesan air yang berlomba menuruni kaca.
@@ -41,7 +29,7 @@ object PreloadedStories {
                 id = "blogger_init_2",
                 title = "Langkah Kaki di Lorong Sunyi",
                 author = "Ruang Cerita",
-                genre = "Horor",
+                genre = "",
                 summary = "Malam sunyi di gedung arsip tua menyimpan rahasia yang tak pernah terungkap selama puluhan tahun.",
                 content = """
                     Lampu neon di lantai tiga gedung arsip tua itu berkedip-kedip tidak menentu. Jam dinding sudah menunjukkan pukul sebelas malam. Sebagai staf penjaga malam baru, tugasku hanya memastikan semua jendela dan pintu terkunci rapat.
@@ -61,7 +49,7 @@ object PreloadedStories {
                 id = "blogger_init_3",
                 title = "Kekacauan di Dapur Chef Budi",
                 author = "Ruang Cerita",
-                genre = "Komedi",
+                genre = "",
                 summary = "Insiden garam yang tertukar dengan gula memicu kehebohan di restoran bintang lima.",
                 content = """
                     Chef Budi terkenal sebagai koki paling disiplin dan perfeksionis se-kota. Tak boleh ada kesalahan sebutir beras pun di dapurnya. Namun hari ini adalah hari perayaan ulang tahun restoran yang ke-10, dan tamu kehormatan dari kantor wali kota sudah menanti hidangan sup buntut legendarisnya.
@@ -81,7 +69,7 @@ object PreloadedStories {
                 id = "blogger_init_4",
                 title = "Pintu Menuju Dimensi Aethelgard",
                 author = "Ruang Cerita",
-                genre = "Fantasi",
+                genre = "",
                 summary = "Sebuah jam saku kuno warisan kakek menjadi kunci pembuka gerbang kerajaan langit.",
                 content = """
                     Elian tak pernah menyangka bahwa jam saku perak pemberian kakeknya bukan sekadar penunjuk waktu. Jarum detiknya berputar berlawanan arah tepat saat gerhana matahari cincin terjadi di langit barat.
@@ -101,7 +89,7 @@ object PreloadedStories {
                 id = "blogger_init_5",
                 title = "Koper Hitam Tanpa Pemilik",
                 author = "Ruang Cerita",
-                genre = "Misteri",
+                genre = "",
                 summary = "Sebuah koper tertinggal di gerbong kereta api komuter membawa teka-teki konspirasi kota.",
                 content = """
                     Gerbong kereta terakhir Stasiun Manggarai sudah kosong melompong ketika petugas kebersihan menemukan sebuah koper kulit hitam berangkaian kunci kombinasi rumit di rak bagasi atas.
@@ -121,7 +109,7 @@ object PreloadedStories {
                 id = "blogger_init_6",
                 title = "Secangkir Teh di Pagi Hari",
                 author = "Ruang Cerita",
-                genre = "Kehidupan",
+                genre = "",
                 summary = "Pelajaran sederhana tentang bersyukur dan menemukan ketenangan di tengah hiruk pikuk kehidupan kota.",
                 content = """
                     Setiap pagi sebelum matahari menyapa cakrawala, Pak Darmo selalu menyeduh secangkir teh melati hangat di teras rumahnya yang rimbun oleh tanaman suplir.

@@ -175,12 +175,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun updateStoryGenre(storyId: String, newGenre: String) {
-        viewModelScope.launch {
-            repository.updateStoryGenre(storyId, newGenre)
-        }
-    }
-
     fun openStoryReader(storyId: String) {
         _currentStoryId.value = storyId
         markStoryAsRead(storyId, true)

@@ -168,7 +168,7 @@ class AppFlowRobolectricTest {
     }
 
     @Test
-    fun dashboardScreen_rendersStoriesAndFilters() {
+    fun dashboardScreen_rendersStoriesWithoutGenreInfo() {
         val sampleStories = listOf(
             StoryEntity(
                 id = "s1",
@@ -207,15 +207,79 @@ class AppFlowRobolectricTest {
         composeTestRule.waitForIdle()
 
         composeTestRule.onNodeWithTag("dashboard_screen_container").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("story_card_s1").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("dashboard_stories_list")
-            .performScrollToNode(androidx.compose.ui.test.hasTestTag("story_card_s2"))
-        composeTestRule.onNodeWithTag("story_card_s2").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("dashboard_toggle_layout_button").assertDoesNotExist()
+        composeTestRule.onNodeWithTag("dashboard_genre_chip_Horor").assertDoesNotExist()
+        composeTestRule.onNodeWithTag("dashboard_genre_chip_Semua").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Romantis").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Horor").assertDoesNotExist()
+        composeTestRule.onNodeWithTag("dashboard_stories_grid").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("story_grid_card_s1").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("story_grid_card_s2").assertIsDisplayed()
+    }
 
-        composeTestRule.onNodeWithTag("dashboard_genre_chip_Horor").performClick()
+    @Test
+    @Config(qualifiers = "w411dp-h915dp")
+    fun dashboardScreen_usesThreeColumnsAndSevenRowsPerPagePagination() {
+        val allStories = (1..25).map { idx ->
+            StoryEntity(
+                id = "s$idx",
+                title = "Cerita Nomor $idx",
+                author = "Penulis $idx",
+                summary = "Ringkasan $idx",
+                content = "Isi cerita $idx",
+                publishedDate = "2026-01-01"
+            )
+        }
+        var searchQuery by mutableStateOf("")
+
+        composeTestRule.setContent {
+            RuangCeritaTheme {
+                val visibleStories = if (searchQuery.isBlank()) allStories
+                else allStories.filter { it.title.contains(searchQuery, ignoreCase = true) }
+                DashboardScreen(
+                    stories = visibleStories,
+                    searchQuery = searchQuery,
+                    syncState = SyncState.Idle,
+                    onSearchQueryChange = { searchQuery = it },
+                    onSyncWeb = {},
+                    onOpenStory = {},
+                    onToggleFavorite = {},
+                    onOpenModeBacaSettings = {}
+                )
+            }
+        }
         composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithTag("story_card_s2").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("story_card_s1").assertDoesNotExist()
+
+        // Verify 3-column grid geometry: s1, s2, s3 share top row; s4 starts row 2
+        val b1 = composeTestRule.onNodeWithTag("story_grid_card_s1").getBoundsInRoot()
+        val b2 = composeTestRule.onNodeWithTag("story_grid_card_s2").getBoundsInRoot()
+        val b3 = composeTestRule.onNodeWithTag("story_grid_card_s3").getBoundsInRoot()
+        val b4 = composeTestRule.onNodeWithTag("story_grid_card_s4").getBoundsInRoot()
+        assertTrue("Column 1 left < Column 2 left", b1.left < b2.left)
+        assertTrue("Column 2 left < Column 3 left", b2.left < b3.left)
+        assertEquals("Row 1 cards share same top", b1.top, b3.top)
+        assertTrue("Card 4 wraps to row 2", b4.top > b1.top)
+
+        // Verify 21 items (3x7) on Page 1
+        composeTestRule.onNodeWithText("Hal 1 / 2").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("dashboard_stories_grid")
+            .performScrollToNode(androidx.compose.ui.test.hasTestTag("story_grid_card_s21"))
+        composeTestRule.onNodeWithTag("story_grid_card_s21").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("story_grid_card_s22").assertDoesNotExist()
+
+        // Navigate to Page 2
+        composeTestRule.onNodeWithTag("dashboard_next_page_button").performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithText("Hal 2 / 2").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("story_grid_card_s22").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("story_grid_card_s25").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("story_grid_card_s1").assertDoesNotExist()
+
+        // Typing a search query resets back to Page 1
+        composeTestRule.onNodeWithTag("dashboard_search_input").performTextInput("Nomor 23")
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithText("Hal 1 / 1").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("story_grid_card_s23").assertIsDisplayed()
     }
 
     @Test

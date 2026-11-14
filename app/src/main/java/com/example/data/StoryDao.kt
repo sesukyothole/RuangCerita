@@ -11,9 +11,6 @@ interface StoryDao {
     @Query("SELECT * FROM stories ORDER BY id ASC")
     fun getAllStories(): Flow<List<StoryEntity>>
 
-    @Query("SELECT * FROM stories WHERE genre = :genre ORDER BY id ASC")
-    fun getStoriesByGenre(genre: String): Flow<List<StoryEntity>>
-
     @Query("SELECT * FROM stories WHERE isFavorite = 1 ORDER BY title ASC")
     fun getFavoriteStories(): Flow<List<StoryEntity>>
 
@@ -37,9 +34,6 @@ interface StoryDao {
 
     @Query("UPDATE stories SET isRead = :isRead WHERE id = :id")
     suspend fun updateReadStatus(id: String, isRead: Boolean)
-
-    @Query("UPDATE stories SET genre = :genre WHERE id = :id")
-    suspend fun updateStoryGenre(id: String, genre: String)
 
     @Query("SELECT * FROM stories WHERE title LIKE '%' || :query || '%' OR summary LIKE '%' || :query || '%' OR content LIKE '%' || :query || '%'")
     fun searchStories(query: String): Flow<List<StoryEntity>>

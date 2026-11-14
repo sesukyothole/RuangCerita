@@ -516,7 +516,6 @@ fun RuangCeritaApp(viewModel: MainViewModel) {
                         onOpenStory = { viewModel.openStoryReader(it) },
                         onToggleFavorite = { viewModel.toggleFavorite(it) },
                         onOpenModeBacaSettings = { showGlobalReaderSettingsSheet = true },
-                        onUpdateGenre = { storyId, newGenre -> viewModel.updateStoryGenre(storyId, newGenre) },
                         onOpenAdminChangePin = { showAdminChangePinDialog = true }
                     )
                 }

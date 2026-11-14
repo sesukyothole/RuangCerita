@@ -156,7 +156,7 @@ fun GreetingOverlay(
 
                 // Subtitle
                 Text(
-                    text = "Kumpulan cerita inspiratif tersusun rapi berdasar genre. Baca secara online & offline kapan saja.",
+                    text = "Kumpulan cerita pilihan tersusun rapi dalam tampilan grid. Baca secara online & offline kapan saja.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
@@ -212,8 +212,8 @@ fun GreetingOverlay(
                     ) {
                         GreetingFeatureRow(
                             icon = Icons.Default.Category,
-                            title = "Cerita Berdasarkan Genre",
-                            subtitle = "Romantis, Horor, Komedi, Fantasi & Kehidupan"
+                            title = "Koleksi Cerita Lengkap",
+                            subtitle = "Tersusun rapi dalam grid 3 kolom & mudah dijelajahi"
                         )
                         GreetingFeatureRow(
                             icon = Icons.Default.Book,

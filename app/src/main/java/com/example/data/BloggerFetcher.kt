@@ -146,31 +146,6 @@ class BloggerFetcher {
                         authorArray.getJSONObject(0).optJSONObject("name")?.optString("\$t") ?: "Penulis Cerita"
                     } else "Penulis Cerita"
 
-                    val categoryArray = entry.optJSONArray("category")
-                    var detectedGenre = "Kehidupan"
-                    if (categoryArray != null && categoryArray.length() > 0) {
-                        for (j in 0 until categoryArray.length()) {
-                            val term = categoryArray.getJSONObject(j).optString("term", "").lowercase()
-                            when {
-                                term.contains("roman") || term.contains("cinta") -> detectedGenre = "Romantis"
-                                term.contains("horor") || term.contains("seram") || term.contains("misteri") -> detectedGenre = "Horor"
-                                term.contains("komedi") || term.contains("lucu") -> detectedGenre = "Komedi"
-                                term.contains("fanta") || term.contains("gaib") -> detectedGenre = "Fantasi"
-                                term.contains("petualang") -> detectedGenre = "Petualangan"
-                                term.contains("sci") || term.contains("teknologi") -> detectedGenre = "Sci-Fi"
-                            }
-                        }
-                    } else {
-                        val combinedText = (title + " " + cleanText).lowercase()
-                        when {
-                            combinedText.contains("cinta") || combinedText.contains("senja") || combinedText.contains("janji") -> detectedGenre = "Romantis"
-                            combinedText.contains("hantu") || combinedText.contains("malam") || combinedText.contains("jam") -> detectedGenre = "Horor"
-                            combinedText.contains("lucu") || combinedText.contains("konyol") || combinedText.contains("warung") -> detectedGenre = "Komedi"
-                            combinedText.contains("ajaib") || combinedText.contains("hutan") -> detectedGenre = "Fantasi"
-                            combinedText.contains("jurang") || combinedText.contains("ombak") -> detectedGenre = "Petualangan"
-                        }
-                    }
-
                     val estimatedReadTime = (cleanText.split("\\s+".toRegex()).size / 120).coerceAtLeast(3)
 
                     stories.add(
@@ -178,7 +153,7 @@ class BloggerFetcher {
                             id = cleanId,
                             title = title,
                             author = authorName,
-                            genre = detectedGenre,
+                            genre = "",
                             summary = summary,
                             content = if (cleanText.isNotBlank()) cleanText else "Cerita dapat dibaca langsung di aplikasi ini.",
                             publishedDate = cleanDate,
